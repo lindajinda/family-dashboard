@@ -33,12 +33,13 @@ vm.createContext(sandbox);
 // plain <script> tags, and a trailing line hands the modules back to us.
 const read = f => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8');
 
-const bundle = ['seed.js', 'store.js', 'scheduler.js', 'habits.js'].map(read).join('\n;\n')
-  + '\n;globalThis.__exports = { Store, Scheduler, Habits, Seed };';
+const bundle = ['seed.js', 'store.js', 'scheduler.js', 'habits.js', 'import.js']
+  .map(read).join('\n;\n')
+  + '\n;globalThis.__exports = { Store, Scheduler, Habits, Seed, Importer };';
 
 vm.runInContext(bundle, sandbox, { filename: 'app-bundle.js' });
 
-const { Store, Scheduler, Habits } = sandbox.__exports;
+const { Store, Scheduler, Habits, Importer } = sandbox.__exports;
 
 /* ---------------------------------------------------------------- test harness */
 let pass = 0, fail = 0;
@@ -250,6 +251,98 @@ test('today() uses the LOCAL date, not UTC (a classic evening bug)', () => {
   // toISOString() would report tomorrow's date after 7pm in a negative-offset zone
   const d = new Date(2026, 8, 14, 23, 30);   // 14 Sep, 11:30pm local
   eq(Store.toKey(d), '2026-09-14');
+});
+
+/* =========================================================== CURRICULUM IMPORT */
+
+console.log('\nCurriculum import');
+
+test('a plain chapter list becomes lessons, in order', () => {
+  const { lessons } = Importer.parse('Chapter 1: Cells\nChapter 2: Genetics\nChapter 3: Evolution');
+  eq(lessons.length, 3);
+  eq(lessons.map(l => l.title), ['Chapter 1: Cells', 'Chapter 2: Genetics', 'Chapter 3: Evolution']);
+  eq(lessons[0].minutes, 45, 'sensible default duration');
+});
+
+test('pipes add minutes and notes', () => {
+  const { lessons } = Importer.parse('Chapter 3: Cells | 60 | Read pp. 20-34');
+  eq(lessons[0], { title: 'Chapter 3: Cells', minutes: 60, notes: 'Read pp. 20-34' });
+});
+
+test('blank lines are ignored', () => {
+  const { lessons } = Importer.parse('One\n\n\nTwo\n   \nThree');
+  eq(lessons.length, 3);
+});
+
+test('a spreadsheet header row is skipped', () => {
+  const { lessons } = Importer.parse('Title, Minutes, Notes\nChapter 1, 30, intro');
+  eq(lessons.length, 1);
+  eq(lessons[0].title, 'Chapter 1');
+  eq(lessons[0].minutes, 30);
+});
+
+test('a comma INSIDE a title is not mistaken for a column', () => {
+  // The trap. "Cells, tissues and organs" must stay one lesson, not become a
+  // lesson called "Cells" with garbage in the duration. Commas only split when
+  // what follows them is actually a number.
+  const { lessons } = Importer.parse('Cells, tissues and organs');
+  eq(lessons.length, 1);
+  eq(lessons[0].title, 'Cells, tissues and organs');
+  eq(lessons[0].minutes, 45);
+});
+
+test('tab-separated paste from Excel works', () => {
+  const { lessons } = Importer.parse('Chapter 1\t30\tread first');
+  eq(lessons[0], { title: 'Chapter 1', minutes: 30, notes: 'read first' });
+});
+
+test('a nonsense duration falls back to the default instead of corrupting the lesson', () => {
+  const { lessons } = Importer.parse('Chapter 1 | banana');
+  eq(lessons[0].minutes, 45);
+});
+
+test('imported lessons land on consecutive SCHOOL days', () => {
+  const { cur } = build([]);
+  const { lessons } = Importer.parse('A\nB\nC\nD\nE');
+  Importer.apply(cur.id, lessons, THU, 'append');       // starting Thu 17 Sep
+
+  eq(Store.sequence(cur.id).map(l => l.date),
+     [THU, FRI, NEXT_MON, '2026-09-22', '2026-09-23'], 'the weekend was skipped');
+});
+
+test('replace wipes unfinished lessons but NEVER completed ones', () => {
+  const { cur } = build([MON, TUE]);
+  const first = Store.sequence(cur.id)[0];
+  Store.update('lessons', first.id, { done: true, title: 'ALREADY DONE' });
+
+  const { lessons } = Importer.parse('New A\nNew B');
+  Importer.apply(cur.id, lessons, WED, 'replace');
+
+  const titles = Store.sequence(cur.id).map(l => l.title);
+  ok(titles.includes('ALREADY DONE'), 'completed work survived the replace');
+  ok(titles.includes('New A') && titles.includes('New B'), 'the new lessons are there');
+  ok(!titles.includes('Chapter 2'), 'the unfinished old lesson was replaced');
+});
+
+test('append adds after the existing lessons and keeps the numbering going', () => {
+  const { cur } = build([MON, TUE]);
+  const { lessons } = Importer.parse('Third\nFourth');
+  Importer.apply(cur.id, lessons, MON, 'append');
+
+  const seq = Store.sequence(cur.id);
+  eq(seq.length, 4);
+  eq(seq.map(l => l.seq), [1, 2, 3, 4]);
+  eq(seq[3].title, 'Fourth');
+});
+
+test('a pinned lesson keeps its fixed date when the rest is laid out', () => {
+  const { cur } = build([MON, TUE, WED]);
+  const exam = Store.sequence(cur.id)[2];
+  Store.update('lessons', exam.id, { pinned: true, date: FRI, title: 'EXAM' });
+
+  Importer.layOutIncomplete(cur.id, MON);
+
+  eq(Store.sequence(cur.id)[2].date, FRI, 'the exam stayed on its fixed date');
 });
 
 /* ==================================================================== report */

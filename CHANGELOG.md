@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.0] - 2026-07-12
+
+### Added
+- **Curriculum page.** Pick a child and a subject, then load the real lesson list:
+  paste it, or upload a CSV/text file. Lessons are scheduled across school days
+  automatically, weekends and holidays skipped. Shows progress, remaining lessons and
+  an estimated finish date per subject.
+- Forgiving import parser: plain lines, `Title | minutes | notes`, tab-separated paste
+  from Excel, or comma-separated. Spreadsheet header rows are detected and skipped, and
+  a comma inside a title ("Cells, tissues and organs") is not mistaken for a column.
+- Per-lesson editing: title, notes, date, duration, and a **fixed date** flag for exams
+  and co-op classes that must never be moved by rescheduling.
+- "Reschedule from a date" — re-lays the whole unfinished sequence from any start date.
+- Append or replace on import. **Replace never removes completed lessons** — that history
+  is permanent.
+- 11 more tests (29 total).
+
 ## [Unreleased]
 
 Next up, in order:

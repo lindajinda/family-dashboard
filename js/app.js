@@ -74,6 +74,7 @@ const App = (() => {
     { id: 'today',     label: 'Today',      icon: '📅' },
     { id: 'habits',    label: 'Habits',     icon: '✅' },
     { sep: true },
+    { id: 'curriculum',label: 'Curriculum', icon: '📖' },
     { id: 'subjects',  label: 'Subjects',   icon: '📚' },
     { id: 'tasks',     label: 'Tasks',      icon: '📋' },
     { id: 'portfolio', label: 'Portfolio',  icon: '🏆' },
@@ -110,7 +111,8 @@ const App = (() => {
     };
 
     main.innerHTML = '';
-    (Pages[page] || Pages.dashboard)(main);
+    const view = page === 'curriculum' ? CurriculumPage.render : (Pages[page] || Pages.dashboard);
+    view(main);
 
     // let any page put a "go to page" button anywhere
     main.querySelectorAll('[data-go]').forEach(b => {
