@@ -263,7 +263,17 @@ const Pages = (() => {
       line.onclick = e => {
         e.preventDefault();
         Store.togglePart(l.id, p.id, date);
+
+        // Finishing work early pulls the rest of THIS subject up to fill the gap.
+        // Only this subject — the others are none of its business.
+        const moves = Scheduler.afterCompletion(l.curriculumId, Store.today());
         App.render();
+
+        if (moves.length) {
+          setTimeout(() => banner(
+            `You're ahead in ${l.subject.name}. ${moves.length} lesson${moves.length === 1 ? '' : 's'} ` +
+            `moved earlier. Other subjects unchanged.`), 0);
+        }
       };
       wrap.appendChild(line);
     });
@@ -359,7 +369,16 @@ const Pages = (() => {
           // Completed on the day it was ACTUALLY done, not the day it was planned for.
           // The portfolio should say when the child did the work.
           Store.togglePart(lesson.id, p.id, Store.today());
+
+          // Working ahead closes the gap: the rest of this subject moves up.
+          const moves = Scheduler.afterCompletion(lesson.curriculumId, Store.today());
           App.render();
+
+          if (moves.length) {
+            setTimeout(() => banner(
+              `Nice — you're ahead in ${s.name}. ${moves.length} lesson${moves.length === 1 ? '' : 's'} ` +
+              `moved earlier. Other subjects unchanged.`), 0);
+          }
         };
         wrap.appendChild(line);
       });

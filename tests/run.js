@@ -426,15 +426,85 @@ test('un-ticking a part re-opens the day', () => {
   ok(!Store.isLessonDone(Store.lesson(l.id)), 'the day is open again');
 });
 
-test('working ahead: a future assignment can be ticked, and nothing reschedules', () => {
+test('working ahead: a day finished early is re-dated to when it was ACTUALLY done', () => {
   const { cur } = build([MON, TUE, WED]);
-  const future = Store.sequence(cur.id)[2];       // Wednesday's work
+  const future = Store.sequence(cur.id)[2];       // planned for Wednesday
 
-  const datesBefore = dates(cur);
-  Store.partsOf(future).forEach(p => Store.togglePart(future.id, p.id, MON));  // done on Monday
+  Store.partsOf(future).forEach(p => Store.togglePart(future.id, p.id, MON));  // done Monday
 
-  ok(Store.isLessonDone(Store.lesson(future.id)), 'the future day is complete');
-  eq(dates(cur), datesBefore, 'finishing early rescheduled nothing');
+  const l = Store.lesson(future.id);
+  ok(Store.isLessonDone(l), 'the day is complete');
+  eq(l.date, MON, 'it now sits on the day it was really done');
+  eq(l.plannedDate, WED, 'and remembers when it had been planned for');
+});
+
+test('working ahead PULLS THE REST OF THE SUBJECT UP', () => {
+  // Finish Monday and Tuesday's work on Monday. Wednesday's work should move up to
+  // Tuesday -- the student is a day ahead, and the schedule should say so.
+  const { cur } = build([MON, TUE, WED]);
+  const [d1, d2, d3] = Store.sequence(cur.id);
+
+  Store.partsOf(d1).forEach(p => Store.togglePart(d1.id, p.id, MON));
+  Store.partsOf(d2).forEach(p => Store.togglePart(d2.id, p.id, MON));   // done early
+
+  Scheduler.afterCompletion(cur.id, MON);
+
+  eq(Store.lesson(d3.id).date, TUE, 'Wednesday\'s lesson moved up to Tuesday');
+});
+
+test('finishing only TODAY\'s work does not yank tomorrow onto today', () => {
+  // The obvious way to get this wrong. Completing Monday must not drag Tuesday's
+  // lesson into Monday -- the child would never stop being handed work.
+  const { cur } = build([MON, TUE, WED]);
+  const [d1, d2] = Store.sequence(cur.id);
+
+  Store.partsOf(d1).forEach(p => Store.togglePart(d1.id, p.id, MON));
+  Scheduler.afterCompletion(cur.id, MON);
+
+  eq(Store.lesson(d2.id).date, TUE, 'tomorrow stays tomorrow');
+});
+
+test('pulling forward never postpones anything', () => {
+  const { cur } = build([MON, TUE, WED]);
+  const before = dates(cur);
+
+  Scheduler.pullForward(cur.id, MON);             // nothing is done; nothing to compact
+
+  eq(dates(cur), before, 'an already-tight schedule is left alone');
+});
+
+test('pulling forward skips a pinned exam and never moves it', () => {
+  const { cur } = build([MON, TUE, WED, THU]);
+  const [d1, d2, d3, d4] = Store.sequence(cur.id);
+
+  Store.update('lessons', d3.id, { pinned: true, title: 'EXAM' });   // exam fixed to Wed
+  Store.partsOf(d1).forEach(p => Store.togglePart(d1.id, p.id, MON));
+  Store.partsOf(d2).forEach(p => Store.togglePart(d2.id, p.id, MON)); // both done Monday
+
+  Scheduler.afterCompletion(cur.id, MON);
+
+  eq(Store.lesson(d3.id).date, WED, 'the exam did not move');
+  eq(Store.lesson(d4.id).date, TUE, 'the lesson after it was pulled up past the exam');
+});
+
+test('working ahead in one subject does not touch another', () => {
+  const { child } = build([MON, TUE, WED], 'Latin');
+  const latin = Store.curricula()[0];
+
+  const maths = Store.add('subjects', { name: 'Maths', icon: '', color: '#222', order: 1, archived: false });
+  const mathsCur = Store.add('curricula', { childId: child.id, subjectId: maths.id, schoolYear: '2026-2027' });
+  [MON, TUE, WED].forEach((d, i) => Store.add('lessons', {
+    curriculumId: mathsCur.id, seq: i + 1, title: `Maths ${i + 1}`, date: d,
+    parts: Importer.makeParts([`Maths work ${i + 1}`]),
+    minutes: 0, done: false, hidden: false, pinned: false, priority: 'normal'
+  }));
+
+  const [l1, l2] = Store.sequence(latin.id);
+  Store.partsOf(l1).forEach(p => Store.togglePart(l1.id, p.id, MON));
+  Store.partsOf(l2).forEach(p => Store.togglePart(l2.id, p.id, MON));
+  Scheduler.afterCompletion(latin.id, MON);
+
+  eq(dates(mathsCur), [MON, TUE, WED], 'Maths did not budge');
 });
 
 test('a part completed early is recorded on the day it was ACTUALLY done', () => {

@@ -154,8 +154,20 @@ const Store = (() => {
 
       // `done` is a cached roll-up of the parts, so the scheduler and every screen
       // can keep asking a simple question.
+      const wasDone = lesson.done;
       lesson.done = api.isLessonDone(lesson);
       lesson.completedOn = lesson.done ? nowIso() : null;
+
+      // A day finished EARLY is re-dated to the day it was actually done.
+      //
+      // This is not cosmetic. If a student does Thursday's work on Monday and we
+      // leave that lesson sitting on Thursday, Thursday still looks occupied — so
+      // nothing can be pulled up into it, and the schedule cannot compact. Re-dating
+      // it frees the slot and makes the calendar tell the truth about what happened.
+      if (lesson.done && !wasDone && lesson.date && onDate < lesson.date && !lesson.pinned) {
+        lesson.plannedDate = lesson.plannedDate || lesson.date;   // keep the original
+        lesson.date = onDate;
+      }
 
       if (part.done) {
         const cur = api.curriculum(lesson.curriculumId);
