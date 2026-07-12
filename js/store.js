@@ -119,6 +119,69 @@ const Store = (() => {
     lesson: id => data.lessons.find(l => l.id === id),
     habit: id => data.habits.find(h => h.id === id),
 
+    /* ------------------------------------------------------------------- parts
+
+       A day's assignment in one subject is usually several things: a reading, a
+       problem set, a reading from a different book. Each is ticked off on its own.
+
+       A lesson is DONE only when every part is done. Anything still unticked at the
+       end of the day is what rolls forward — so a half-finished day carries only the
+       leftovers into tomorrow, not the work already completed. */
+
+    partsOf(lesson) {
+      return (lesson.parts || []).filter(p => !p.deleted);
+    },
+
+    isLessonDone(lesson) {
+      const parts = api.partsOf(lesson);
+      return parts.length > 0 && parts.every(p => p.done);
+    },
+
+    /** Parts still owed. These are what a shift carries to the next day. */
+    remainingParts(lesson) {
+      return api.partsOf(lesson).filter(p => !p.done);
+    },
+
+    togglePart(lessonId, partId, onDate) {
+      const lesson = api.lesson(lessonId);
+      if (!lesson) return;
+
+      const part = (lesson.parts || []).find(p => p.id === partId);
+      if (!part) return;
+
+      part.done = !part.done;
+      part.doneOn = part.done ? onDate : null;
+
+      // `done` is a cached roll-up of the parts, so the scheduler and every screen
+      // can keep asking a simple question.
+      lesson.done = api.isLessonDone(lesson);
+      lesson.completedOn = lesson.done ? nowIso() : null;
+
+      if (part.done) {
+        const cur = api.curriculum(lesson.curriculumId);
+        const child = cur && api.child(cur.childId);
+        const subject = cur && api.subject(cur.subjectId);
+
+        api.recordCompletion({
+          kind: 'part',
+          childId: child ? child.id : null,
+          childName: child ? child.name : '',
+          subjectId: subject ? subject.id : null,
+          subjectName: subject ? subject.name : '',   // denormalised: renaming a
+          title: part.text,                           // subject later must not
+          lessonTitle: lesson.title,                  // corrupt this history
+          category: 'Assignment',
+          assignedDate: lesson.date,
+          date: onDate,
+          minutes: 0,
+          notes: ''
+        });
+      }
+
+      touch();
+      return part.done;
+    },
+
     /** Lessons for one child on one day, newest schedule state included. */
     lessonsOn(childId, date) {
       const curById = {};
@@ -214,6 +277,7 @@ const Store = (() => {
         try {
           data = JSON.parse(text);
           if (!data.schemaVersion) data = emptyData();
+          migrate();
         } catch {
           data = emptyData();
         }
@@ -248,6 +312,34 @@ const Store = (() => {
       emit();
     }
   };
+
+  /**
+   * Bring an older saved file up to the current shape, in place.
+   *
+   * Lessons used to be a single checkbox. They are now a list of parts. Anything
+   * saved before that change gets one part, named after the lesson, carrying the
+   * old completed flag — so nobody loses a term of ticked-off work to an upgrade.
+   */
+  function migrate() {
+    let changed = false;
+
+    (data.lessons || []).forEach(l => {
+      if (Array.isArray(l.parts) && l.parts.length) return;
+
+      l.parts = [{
+        id: uid(),
+        text: l.title,
+        done: !!l.done,
+        doneOn: l.done ? (l.date || null) : null
+      }];
+      changed = true;
+    });
+
+    if (changed) {
+      data.schemaVersion = SCHEMA_VERSION;
+      api.save();
+    }
+  }
 
   function touch() {
     data.updatedAt = nowIso();

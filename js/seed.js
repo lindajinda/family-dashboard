@@ -75,13 +75,22 @@ const Seed = (() => {
         if (!Store.isSchoolDay(date)) date = Store.nextSchoolDay(date);
 
         for (let n = 1; n <= CHAPTERS; n++) {
+          // A day's assignment is usually several things. The sample data shows that
+          // shape so the multi-part behaviour is obvious on first launch.
+          const parts = [
+            `Read Chapter ${n}`,
+            `Problem set ${n}`,
+            ...(n % 3 === 0 ? [`Supplementary reading ${n}`] : [])
+          ];
+
           Store.add('lessons', {
             curriculumId: cur.id,
             seq: n,
             title: `Chapter ${n}`,
+            parts: parts.map(t => ({ id: Store.uid(), text: t, done: false, doneOn: null })),
             notes: '',
             date,
-            minutes: 45,
+            minutes: 0,
             done: false,
             hidden: false,
             pinned: false,

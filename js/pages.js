@@ -31,18 +31,24 @@ const Pages = (() => {
     `));
 
     // ---- family totals ----
-    let allLessons = [], allDone = 0, mins = 0, doneMins = 0, overdue = 0;
+    // Counted in PARTS, not lessons: a day is a reading plus a problem set plus a
+    // second reading, and "3 of 4 assignments done" is the honest number.
+    let allLessons = [], allDone = 0, parts = 0, partsDone = 0, overdue = 0;
+
     children.forEach(c => {
       const ls = Store.lessonsOn(c.id, today);
       allLessons = allLessons.concat(ls);
       ls.forEach(l => {
-        mins += l.minutes || 0;
-        if (l.done) { allDone++; doneMins += l.minutes || 0; }
+        const p = Store.partsOf(l);
+        parts += p.length;
+        partsDone += p.filter(x => x.done).length;
+        if (Store.isLessonDone(l)) allDone++;
       });
     });
 
     Store.curricula().forEach(cur => {
-      overdue += Store.sequence(cur.id).filter(l => !l.done && l.date && l.date < today).length;
+      overdue += Store.sequence(cur.id)
+        .filter(l => !Store.isLessonDone(l) && l.date && l.date < today).length;
     });
 
     const tasksDue = Store.tasks().filter(t => !t.done && t.due && t.due <= Store.addDays(today, 7));
@@ -50,13 +56,13 @@ const Pages = (() => {
     root.appendChild(h(`
       <div class="grid grid-4" style="margin-bottom:18px">
         <div class="card stat">
-          <div class="n">${allDone}/${allLessons.length}</div>
-          <div class="l">Lessons done today</div>
-          <div class="bar mt" style="margin-top:8px"><i style="width:${pct(allDone, allLessons.length)}%"></i></div>
+          <div class="n">${partsDone}/${parts}</div>
+          <div class="l">Assignments done today</div>
+          <div class="bar mt" style="margin-top:8px"><i style="width:${pct(partsDone, parts)}%"></i></div>
         </div>
         <div class="card stat">
-          <div class="n">${Math.round(doneMins / 60 * 10) / 10}<span style="font-size:16px;color:var(--text-2)"> / ${Math.round(mins / 60 * 10) / 10} h</span></div>
-          <div class="l">Hours completed / planned</div>
+          <div class="n">${allDone}/${allLessons.length}</div>
+          <div class="l">Subjects fully finished</div>
         </div>
         <div class="card stat">
           <div class="n" style="color:${overdue ? 'var(--red)' : 'var(--green)'}">${overdue}</div>
@@ -128,6 +134,7 @@ const Pages = (() => {
 
   let todayChild = null;
   let todayDate = null;
+  let workAhead = false;
 
   function today(root) {
     const children = Store.children();
@@ -137,7 +144,15 @@ const Pages = (() => {
     const child = Store.child(todayChild);
     const date = todayDate;
     const lessons = Store.lessonsOn(todayChild, date);
-    const done = lessons.filter(l => l.done).length;
+
+    // Progress is counted in PARTS, not lessons. A day with one lesson of four parts
+    // and three of them done is 75% through, and it should say so.
+    let parts = 0, partsDone = 0;
+    lessons.forEach(l => {
+      const p = Store.partsOf(l);
+      parts += p.length;
+      partsDone += p.filter(x => x.done).length;
+    });
 
     root.appendChild(h(`
       <div class="page-head">
@@ -151,16 +166,17 @@ const Pages = (() => {
       </div>
 
       <div class="flex wrap" style="margin-bottom:18px">
-        <button class="btn btn-icon" id="prevDay" title="Previous day">‹</button>
+        <button class="btn btn-icon" id="prevDay" title="Previous day">&lsaquo;</button>
         <button class="btn" id="goToday">Today</button>
-        <button class="btn btn-icon" id="nextDay" title="Next day">›</button>
-        <div class="right" style="min-width:220px">
-          <div class="small muted">${done} of ${lessons.length} complete</div>
-          <div class="bar" style="margin-top:6px"><i style="width:${pct(done, lessons.length)}%"></i></div>
+        <button class="btn btn-icon" id="nextDay" title="Next day">&rsaquo;</button>
+        <div class="right" style="min-width:240px">
+          <div class="small muted">${partsDone} of ${parts} assignment${parts === 1 ? '' : 's'} done</div>
+          <div class="bar" style="margin-top:6px"><i style="width:${pct(partsDone, parts)}%"></i></div>
         </div>
       </div>
       <div id="banner"></div>
       <div id="rows"></div>
+      <div id="ahead"></div>
       <div id="habitBlock"></div>
     `));
 
@@ -174,130 +190,195 @@ const Pages = (() => {
 
     const rows = root.querySelector('#rows');
 
-    // Habits belong on this page too — they are part of "today's work", and having
-    // to visit a second screen to tick off skin care is exactly the kind of friction
-    // that makes a tracker stop getting used.
-    renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
-
     if (!lessons.length) {
       rows.appendChild(h(`
         <div class="card empty">
-          <div class="big">🎉</div>
+          <div class="big">&#127881;</div>
           <div>No lessons scheduled for ${esc(child ? child.name : '')} on this day.</div>
         </div>`));
-      return;
+    } else {
+      lessons.forEach(l => rows.appendChild(lessonCard(l, date)));
     }
 
-    lessons.forEach(l => {
-      const s = l.subject;
-      const cls = l.done ? 'is-done' : (l.skipped ? 'is-skipped' : '');
+    renderWorkAhead(root.querySelector('#ahead'), todayChild, date);
+    renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
+  }
 
-      const row = h(`
-        <div class="row ${cls}">
-          <div class="stripe" style="background:${esc(s.color)}"></div>
-          <button class="check ${l.done ? 'on' : ''}" title="Complete">✓</button>
-          <div class="row-main">
-            <div class="row-meta">
-              <span class="row-subject" style="color:${esc(s.color)}">${esc(s.icon)} ${esc(s.name)}</span>
-              <span class="chip">${l.minutes} min</span>
-              ${l.priority === 'high' ? '<span class="chip chip-high">High</span>' : ''}
-              ${l.pinned ? '<span class="chip chip-info">📌 Fixed date</span>' : ''}
-              ${l.skipped ? '<span class="chip chip-warn">Skipped</span>' : ''}
-            </div>
-            <div class="row-title">${esc(l.title)}</div>
-            ${l.notes ? `<div class="small muted">${esc(l.notes)}</div>` : ''}
+  function banner(msg) {
+    const b = document.querySelector('#banner');
+    if (!b) return;
+    b.innerHTML = '';
+    b.appendChild(h(`<div class="banner">&#8505;&#65039; <span>${esc(msg)}</span></div>`));
+  }
+
+  /* ---------------------------------------------------------------- one lesson
+
+     A day's assignment in one subject, with a checkbox per part: a reading, a
+     problem set, a reading from another book. Each ticks off on its own. */
+
+  function lessonCard(l, date) {
+    const s = l.subject;
+    const parts = Store.partsOf(l);
+    const doneCount = parts.filter(p => p.done).length;
+    const allDone = doneCount === parts.length && parts.length > 0;
+    const started = doneCount > 0 && !allDone;
+
+    const card = h(`
+      <div class="row ${allDone ? 'is-done' : ''}" style="align-items:stretch">
+        <div class="stripe" style="background:${esc(s.color)}"></div>
+        <div class="row-main">
+          <div class="row-meta">
+            <span class="row-subject" style="color:${esc(s.color)}">${esc(s.icon)} ${esc(s.name)}</span>
+            <span class="row-title" style="font-weight:500">${esc(l.title)}</span>
+            <span class="chip ${allDone ? 'chip-good' : (started ? 'chip-warn' : '')}">${doneCount}/${parts.length}</span>
+            ${l.priority === 'high' ? '<span class="chip chip-high">High</span>' : ''}
+            ${l.pinned ? '<span class="chip chip-info">&#128204; Fixed date</span>' : ''}
           </div>
-          <div class="row-actions">
-            <button class="btn btn-sm" data-act="skip"  ${l.done ? 'disabled' : ''}>Skip</button>
-            <button class="btn btn-sm" data-act="move"  ${l.done ? 'disabled' : ''}>Move to tomorrow</button>
-            <button class="btn btn-sm" data-act="note">Notes</button>
-          </div>
+
+          <div class="parts" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"></div>
+
+          ${l.notes ? `<div class="small muted" style="margin-top:8px">${esc(l.notes)}</div>` : ''}
         </div>
+
+        <div class="row-actions" style="align-items:flex-start">
+          <button class="btn btn-sm" data-act="move" ${allDone ? 'disabled' : ''}>Move to tomorrow</button>
+          <button class="btn btn-sm" data-act="note">Notes</button>
+        </div>
+      </div>
+    `).firstElementChild;
+
+    const wrap = card.querySelector('.parts');
+
+    parts.forEach(p => {
+      const line = h(`
+        <label class="flex" style="
+            gap:12px; cursor:pointer; padding:8px 12px; border-radius:8px;
+            border:1px solid var(--border);
+            background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
+          <span class="check ${p.done ? 'on' : ''}" style="width:26px;height:26px;flex:0 0 26px;font-size:15px">&#10003;</span>
+          <span style="${p.done ? 'text-decoration:line-through;opacity:.6' : ''}">${esc(p.text)}</span>
+        </label>
       `).firstElementChild;
 
-      row.querySelector('.check').onclick = () => complete(l);
-      row.querySelector('[data-act="skip"]').onclick = () => skip(l);
-      row.querySelector('[data-act="move"]').onclick = () => move(l);
-      row.querySelector('[data-act="note"]').onclick = () => noteDialog(l);
-
-      rows.appendChild(row);
+      line.onclick = e => {
+        e.preventDefault();
+        Store.togglePart(l.id, p.id, date);
+        App.render();
+      };
+      wrap.appendChild(line);
     });
 
-    function banner(msg) {
-      const b = root.querySelector('#banner');
-      b.innerHTML = '';
-      b.appendChild(h(`<div class="banner">ℹ️ <span>${esc(msg)}</span></div>`));
-    }
-
-    function complete(l) {
-      const next = !l.done;
-      Store.update('lessons', l.id, { done: next, skipped: false, completedOn: next ? Store.nowIso() : null });
-
-      if (next) {
-        // permanent portfolio entry — this is the record that is never deleted
-        Store.recordCompletion({
-          kind: 'lesson',
-          childId: child.id,
-          childName: child.name,
-          subjectId: l.subject.id,
-          subjectName: l.subject.name,     // denormalised on purpose: renaming a
-          title: l.title,                  // subject later must not corrupt history
-          category: 'Lesson',
-          assignedDate: l.date,
-          date,
-          minutes: l.minutes || 0,
-          notes: l.notes || ''
-        });
-      }
-      App.render();
-    }
-
-    /** Skip = we are NOT doing this and NOT making it up. Nothing shifts. */
-    function skip(l) {
-      Store.update('lessons', l.id, { skipped: true, done: false });
-      App.render();
-      setTimeout(() => banner(`${l.subject.name}: skipped. The rest of ${l.subject.name} did not move.`), 0);
-    }
-
-    /** Move to tomorrow = the rule. This subject slides; the others do not. */
-    function move(l) {
+    card.querySelector('[data-act="move"]').onclick = () => {
+      const remaining = Store.remainingParts(l).length;
       const r = Scheduler.shiftCurriculum(l.curriculumId, date);
       App.render();
       if (r) {
         setTimeout(() => banner(
-          `${l.subject.name} moved to ${fmtShort(r.to)}. ` +
+          `${l.subject.name}: ${remaining} unfinished assignment${remaining === 1 ? '' : 's'} moved to ${fmtShort(r.to)}. ` +
           `${r.moved} ${l.subject.name} lesson${r.moved === 1 ? '' : 's'} shifted to keep the sequence. ` +
-          `Other subjects unchanged.`), 0);
+          `Anything already ticked stays done. Other subjects unchanged.`), 0);
       }
-    }
+    };
 
-    function noteDialog(l) {
+    card.querySelector('[data-act="note"]').onclick = () => {
       Modal.open('Notes — ' + l.title, `
-        <div class="field">
-          <label>Notes</label>
-          <textarea id="n" rows="5">${esc(l.notes || '')}</textarea>
-        </div>`, () => {
-        Store.update('lessons', l.id, { notes: document.querySelector('#n').value });
-        App.render();
+        <div class="field"><label>Notes</label><textarea id="n" rows="5">${esc(l.notes || '')}</textarea></div>`,
+        () => {
+          Store.update('lessons', l.id, { notes: document.querySelector('#n').value });
+          App.render();
+        });
+    };
+
+    return card;
+  }
+
+  /* --------------------------------------------------------------- work ahead
+
+     A student who is ahead should be able to keep going. This lists the next
+     school days' assignments so they can be ticked off from the same screen,
+     without hunting through the calendar. */
+
+  function renderWorkAhead(mount, childId, date) {
+    const upcoming = [];
+    let d = date;
+
+    for (let i = 0; i < 10 && upcoming.length < 12; i++) {
+      d = Store.nextSchoolDay(d);
+      Store.lessonsOn(childId, d).forEach(l => {
+        if (!Store.isLessonDone(l)) upcoming.push({ lesson: l, date: d });
       });
     }
+
+    if (!upcoming.length) return;
+
+    const card = h(`
+      <div class="card" style="margin-top:22px">
+        <div class="flex">
+          <h2 style="margin:0">Work ahead</h2>
+          <span class="chip">${upcoming.length} coming up</span>
+          <button class="btn btn-sm right" id="toggle">${workAhead ? 'Hide' : 'Show'}</button>
+        </div>
+        <div class="small muted" style="margin-top:4px">
+          Feeling ahead? Tick off future assignments from here. Nothing reschedules &mdash;
+          finishing early just means less to do later.
+        </div>
+        <div id="list" style="margin-top:14px;${workAhead ? '' : 'display:none'}"></div>
+      </div>
+    `).firstElementChild;
+
+    card.querySelector('#toggle').onclick = () => { workAhead = !workAhead; App.render(); };
+
+    const list = card.querySelector('#list');
+
+    upcoming.forEach(({ lesson, date: d2 }) => {
+      const s = lesson.subject;
+      const parts = Store.remainingParts(lesson);
+
+      const block = h(`
+        <div style="padding:10px 0;border-top:1px solid var(--border)">
+          <div class="flex wrap" style="margin-bottom:6px">
+            <span style="width:10px;height:10px;border-radius:3px;background:${esc(s.color)}"></span>
+            <b style="color:${esc(s.color)}">${esc(s.name)}</b>
+            <span class="muted small">${esc(lesson.title)}</span>
+            <span class="chip right">${esc(fmtShort(d2))}</span>
+          </div>
+          <div class="parts" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      `).firstElementChild;
+
+      const wrap = block.querySelector('.parts');
+      parts.forEach(p => {
+        const line = h(`
+          <label class="flex" style="gap:10px;cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--border)">
+            <span class="check" style="width:22px;height:22px;flex:0 0 22px;font-size:13px">&#10003;</span>
+            <span class="small">${esc(p.text)}</span>
+          </label>`).firstElementChild;
+
+        line.onclick = e => {
+          e.preventDefault();
+          // Completed on the day it was ACTUALLY done, not the day it was planned for.
+          // The portfolio should say when the child did the work.
+          Store.togglePart(lesson.id, p.id, Store.today());
+          App.render();
+        };
+        wrap.appendChild(line);
+      });
+
+      list.appendChild(block);
+    });
+
+    mount.appendChild(card);
   }
 
   /* --------------------------------------------- habits, inline on the Today page
 
-     Same data and same streak logic as the Habits page — just a compact strip, so
-     the whole of a child's day (lessons AND habits) is finishable from one screen.
-
-     Habits not due on the day being viewed are hidden here rather than dimmed. On
-     the Today page the question is "what is left to do", and a weekday-only habit
-     on a Saturday is not left to do — it isn't owed. The full picture, including
-     rest days, is on the Habits page. */
+     Every habit for the child, always shown. Not filtered, not dimmed: the parent
+     asked for the whole list on this page, and a greyed-out row reads as broken
+     rather than as "resting". Habits that are not scheduled for this weekday are
+     simply labelled as such and can still be ticked. */
 
   function renderHabitsFor(mount, childId, date) {
-    const list = Store.habits()
-      .filter(x => x.childId === childId)
-      .filter(x => Habits.isDue(x, date));
-
+    const list = Store.habits().filter(x => x.childId === childId);
     if (!list.length) return;
 
     const done = list.filter(x => Habits.isDone(x.id, date)).length;
@@ -318,21 +399,21 @@ const Pages = (() => {
     list.forEach(hb => {
       const on = Habits.isDone(hb.id, date);
       const st = Habits.stats(hb, date);
+      const scheduled = Habits.isDue(hb, date);
 
-      // one big tap target per habit — no menus, no confirmation
       const btn = h(`
         <button class="btn" style="
-            min-height:56px; padding:10px 16px; gap:12px;
+            min-height:58px; padding:10px 16px; gap:12px;
             border-color:${on ? esc(hb.color) : 'var(--border-2)'};
             background:${on ? esc(hb.color) : 'var(--surface)'};
             color:${on ? '#fff' : 'var(--text)'};">
           <span class="check ${on ? 'on' : ''}" style="
               width:24px;height:24px;flex:0 0 24px;font-size:14px;pointer-events:none;
-              ${on ? 'background:#fff;border-color:#fff;color:' + esc(hb.color) : ''}">✓</span>
+              ${on ? 'background:#fff;border-color:#fff;color:' + esc(hb.color) : ''}">&#10003;</span>
           <span style="text-align:left">
             <span style="display:block;font-weight:600">${esc(hb.icon || '')} ${esc(hb.name)}</span>
-            <span style="display:block;font-size:12px;opacity:.8">
-              ${st.current > 0 ? '🔥 ' + st.current + ' day streak' : 'No streak yet'}
+            <span style="display:block;font-size:12px;opacity:.85">
+              ${st.current > 0 ? '&#128293; ' + st.current + ' day streak' : 'No streak yet'}${scheduled ? '' : ' &middot; extra'}
             </span>
           </span>
         </button>

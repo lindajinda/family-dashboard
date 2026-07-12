@@ -69,17 +69,22 @@ const CurriculumPage = (() => {
     const subject = Store.subject(subjectId);
     const cur = Store.curriculumFor(childId, subjectId);
     const seq = Store.sequence(cur.id);
-    const done = seq.filter(l => l.done).length;
+
+    const done = seq.filter(l => Store.isLessonDone(l)).length;
     const remaining = seq.length - done;
-    const hours = Math.round(seq.reduce((n, l) => n + (l.minutes || 0), 0) / 60 * 10) / 10;
+
+    // Progress in assignments, since a day is several of them.
+    const allParts = seq.reduce((n, l) => n + Store.partsOf(l).length, 0);
+    const doneParts = seq.reduce((n, l) => n + Store.partsOf(l).filter(p => p.done).length, 0);
+
     const lastDate = seq.filter(l => l.date).map(l => l.date).sort().pop();
 
     root.appendChild(h(`
       <div class="grid grid-4" style="margin-bottom:16px">
-        <div class="card stat"><div class="n">${pct(done, seq.length)}%</div><div class="l">Complete</div>
-          <div class="bar" style="margin-top:8px"><i style="width:${pct(done, seq.length)}%;background:${esc(subject.color)}"></i></div></div>
-        <div class="card stat"><div class="n">${done}</div><div class="l">Lessons done</div></div>
-        <div class="card stat"><div class="n">${remaining}</div><div class="l">Remaining</div></div>
+        <div class="card stat"><div class="n">${pct(doneParts, allParts)}%</div><div class="l">Complete</div>
+          <div class="bar" style="margin-top:8px"><i style="width:${pct(doneParts, allParts)}%;background:${esc(subject.color)}"></i></div></div>
+        <div class="card stat"><div class="n">${done}</div><div class="l">Days finished</div></div>
+        <div class="card stat"><div class="n">${remaining}</div><div class="l">Days remaining</div></div>
         <div class="card stat"><div class="n">${esc(fmt(lastDate))}</div><div class="l">Estimated finish</div></div>
       </div>
 
@@ -89,7 +94,7 @@ const CurriculumPage = (() => {
           <button class="btn btn-lg" id="upload">📄 Upload CSV file</button>
           <input type="file" id="file" accept=".csv,.txt" hidden>
           <button class="btn" id="redate">📆 Reschedule from a date</button>
-          <span class="right small muted">${seq.length} lesson${seq.length === 1 ? '' : 's'} &middot; ${hours} h total</span>
+          <span class="right small muted">${seq.length} day${seq.length === 1 ? '' : 's'} &middot; ${allParts} assignment${allParts === 1 ? '' : 's'}</span>
         </div>
       </div>
     `));
@@ -116,31 +121,39 @@ const CurriculumPage = (() => {
     }
 
     const table = h(`<div class="card"><table>
-      <thead><tr><th style="width:40px">#</th><th>Lesson</th><th style="width:110px">Date</th>
-      <th style="width:70px">Min</th><th style="width:90px">Status</th><th style="width:150px"></th></tr></thead>
+      <thead><tr><th style="width:40px">#</th><th>Day's assignment</th><th style="width:110px">Date</th>
+      <th style="width:110px">Progress</th><th style="width:150px"></th></tr></thead>
       <tbody></tbody></table></div>`).firstElementChild;
 
     const tb = table.querySelector('tbody');
     seq.forEach(l => {
-      const tr = h(`<tr style="${l.done ? 'opacity:.55' : ''}">
+      const parts = Store.partsOf(l);
+      const d = parts.filter(p => p.done).length;
+      const allDone = Store.isLessonDone(l);
+
+      const tr = h(`<tr style="${allDone ? 'opacity:.55' : ''}">
         <td class="muted">${l.seq}</td>
         <td>
           <b>${esc(l.title)}</b>
           ${l.pinned ? '<span class="chip chip-info" style="margin-left:6px">📌 Fixed</span>' : ''}
-          ${l.notes ? `<div class="small muted">${esc(l.notes)}</div>` : ''}
+          <div class="small muted" style="margin-top:3px">
+            ${parts.map(p => `<span style="${p.done ? 'text-decoration:line-through;opacity:.6' : ''}">${esc(p.text)}</span>`).join(' &nbsp;·&nbsp; ')}
+          </div>
+          ${l.notes ? `<div class="small muted" style="margin-top:3px">${esc(l.notes)}</div>` : ''}
         </td>
         <td class="small">${esc(fmt(l.date))}</td>
-        <td class="small">${l.minutes}</td>
-        <td>${l.done ? '<span class="chip chip-good">Done</span>' : '<span class="chip">Planned</span>'}</td>
+        <td>
+          <span class="chip ${allDone ? 'chip-good' : (d ? 'chip-warn' : '')}">${d}/${parts.length}</span>
+        </td>
         <td style="text-align:right">
           <button class="btn btn-sm" data-edit>Edit</button>
-          <button class="btn btn-sm btn-danger" data-del ${l.done ? 'disabled title="Completed work is permanent"' : ''}>Delete</button>
+          <button class="btn btn-sm btn-danger" data-del ${allDone ? 'disabled title="Completed work is permanent"' : ''}>Delete</button>
         </td>
       </tr>`).firstElementChild;
 
       tr.querySelector('[data-edit]').onclick = () => editLesson(l);
       const del = tr.querySelector('[data-del]');
-      if (!l.done) del.onclick = () => { Store.remove('lessons', l.id); App.render(); };
+      if (!allDone) del.onclick = () => { Store.remove('lessons', l.id); App.render(); };
 
       tb.appendChild(tr);
     });
@@ -154,18 +167,19 @@ const CurriculumPage = (() => {
 
     Modal.open(`Add lessons to ${subject.name}`, `
       <div class="small muted" style="margin-bottom:12px">
-        <b>One lesson per line.</b> Paste straight from a book's contents page, a syllabus,
-        or a column in Excel.<br>
-        Minutes and notes are optional — add them after a <b>|</b> or a comma:<br>
-        <code>Chapter 3: Cells | 60 | Read pp. 20-34</code><br>
-        Anything without a duration is assumed to be 45 minutes.
+        <b>One line per day.</b> The first thing on the line is the day's title.
+        Everything after it, separated by <b>|</b>, becomes a separate assignment your
+        child ticks off on its own — a reading, a problem set, a reading from another book:
+        <div style="margin:6px 0"><code>Chapter 3: Cells | Read pp. 20-34 | Problem set 3.1 | Campbell ch. 2</code></div>
+        A line with no <b>|</b> is simply a one-assignment day. Commas and tabs work too,
+        so you can paste straight out of Excel.
         <a href="#" id="tmpl">Download a CSV template</a>
       </div>
 
       <div class="field">
-        <textarea id="txt" rows="10" placeholder="Chapter 1: Introduction
-Chapter 2: The Cell | 45
-Chapter 3: Photosynthesis | 60 | Watch the lab video first">${esc(prefill || '')}</textarea>
+        <textarea id="txt" rows="10" placeholder="Chapter 1: Introduction | Read pp. 1-18 | Questions 1-10
+Chapter 2: The Cell | Read pp. 19-40 | Problem set 2 | Lab video
+Chapter 3: Photosynthesis">${esc(prefill || '')}</textarea>
       </div>
 
       <div class="field">
@@ -202,11 +216,11 @@ Chapter 3: Photosynthesis | 60 | Watch the lab video first">${esc(prefill || '')
       document.querySelector('#tmpl').onclick = e => {
         e.preventDefault();
         const csv = [
-          'Title,Minutes,Notes',
-          'Chapter 1: Introduction,45,Read pp. 1-18',
-          'Chapter 2: The Cell,60,Watch the lab video first',
-          'Chapter 3: Photosynthesis,60,',
-          'Unit 1 Exam,60,Tick "fixed date" after importing so it never moves'
+          'Title,Assignment 1,Assignment 2,Assignment 3',
+          'Chapter 1: Introduction,Read pp. 1-18,Questions 1-10,',
+          'Chapter 2: The Cell,Read pp. 19-40,Problem set 2,Watch lab video',
+          'Chapter 3: Photosynthesis,Read pp. 41-58,,',
+          'Unit 1 Exam,Sit the exam,,'
         ].join('\n');
 
         const a = document.createElement('a');
@@ -218,13 +232,20 @@ Chapter 3: Photosynthesis | 60 | Watch the lab video first">${esc(prefill || '')
       const update = () => {
         const { lessons } = Importer.parse(txt.value);
         if (!lessons.length) { prev.innerHTML = ''; return; }
-        const sample = lessons.slice(0, 3)
-          .map(l => `<li><b>${esc(l.title)}</b> &middot; ${l.minutes} min${l.notes ? ' &middot; ' + esc(l.notes) : ''}</li>`)
-          .join('');
+        const totalParts = lessons.reduce((n, l) => n + l.parts.length, 0);
+        const sample = lessons.slice(0, 3).map(l =>
+          `<li><b>${esc(l.title)}</b>
+             <ul style="margin:2px 0 0 16px">
+               ${l.parts.map(p => `<li>${esc(p)}</li>`).join('')}
+             </ul>
+           </li>`).join('');
+
         prev.innerHTML = `<div class="banner" style="display:block">
-            <b>${lessons.length} lesson${lessons.length === 1 ? '' : 's'}</b> will be added, one per school day.
+            <b>${lessons.length} day${lessons.length === 1 ? '' : 's'}</b>,
+            <b>${totalParts} assignment${totalParts === 1 ? '' : 's'}</b> in total,
+            one day per school day.
             <ul style="margin:8px 0 0 18px">${sample}</ul>
-            ${lessons.length > 3 ? `<div class="small muted" style="margin-top:4px">…and ${lessons.length - 3} more</div>` : ''}
+            ${lessons.length > 3 ? `<div class="small muted" style="margin-top:4px">…and ${lessons.length - 3} more day${lessons.length - 3 === 1 ? '' : 's'}</div>` : ''}
           </div>`;
       };
 
@@ -248,26 +269,58 @@ Chapter 3: Photosynthesis | 60 | Watch the lab video first">${esc(prefill || '')
   }
 
   function editLesson(l) {
-    Modal.open('Edit lesson', `
+    const parts = Store.partsOf(l);
+
+    Modal.open('Edit day', `
       <div class="field"><label>Title</label><input type="text" id="t" value="${esc(l.title)}"></div>
-      <div class="field"><label>Notes</label><textarea id="n" rows="3">${esc(l.notes || '')}</textarea></div>
+
+      <div class="field">
+        <label>Assignments for this day</label>
+        <div class="small muted" style="margin-bottom:6px">One per line. Each is ticked off separately.</div>
+        <textarea id="p" rows="5">${esc(parts.map(p => p.text).join('\n'))}</textarea>
+        ${parts.some(p => p.done)
+          ? '<div class="small muted" style="margin-top:6px">⚠️ Some of these are already completed. Editing the text keeps them completed; removing a line removes it entirely.</div>'
+          : ''}
+      </div>
+
+      <div class="field"><label>Notes</label><textarea id="n" rows="2">${esc(l.notes || '')}</textarea></div>
       <div class="field"><label>Date</label><input type="date" id="d" value="${esc(l.date || '')}"></div>
-      <div class="field"><label>Minutes</label><input type="number" id="m" value="${l.minutes}" min="5" max="480"></div>
+
       <div class="field">
         <label class="flex" style="font-weight:600">
-          <input type="checkbox" id="p" ${l.pinned ? 'checked' : ''} style="width:auto;min-height:0">
+          <input type="checkbox" id="f" ${l.pinned ? 'checked' : ''} style="width:auto;min-height:0">
           <span>Fixed date — never move this one</span>
         </label>
-        <div class="small muted">For exams, co-op classes, anything booked. Rescheduling pushes other work past it.</div>
+        <div class="small muted">For exams and co-op classes. Rescheduling pushes other work past it.</div>
       </div>
     `, () => {
+      const lines = document.querySelector('#p').value
+        .split('\n').map(s => s.trim()).filter(Boolean);
+
+      // Preserve the done flag of any assignment whose text is unchanged. Retyping a
+      // line should not silently un-complete work the child has already finished.
+      const byText = {};
+      parts.forEach(p => { byText[p.text] = p; });
+
+      const next = lines.map(text => {
+        const old = byText[text];
+        return old
+          ? { id: old.id, text, done: old.done, doneOn: old.doneOn }
+          : { id: Store.uid(), text, done: false, doneOn: null };
+      });
+
       Store.update('lessons', l.id, {
         title: document.querySelector('#t').value.trim() || l.title,
+        parts: next.length ? next : parts,        // never leave a day with no assignments
         notes: document.querySelector('#n').value,
         date: document.querySelector('#d').value || null,
-        minutes: Number(document.querySelector('#m').value) || l.minutes,
-        pinned: document.querySelector('#p').checked
+        pinned: document.querySelector('#f').checked
       });
+
+      // recompute the cached roll-up
+      const fresh = Store.lesson(l.id);
+      Store.update('lessons', l.id, { done: Store.isLessonDone(fresh) });
+
       App.render();
     });
   }

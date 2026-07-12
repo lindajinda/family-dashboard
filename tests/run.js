@@ -74,7 +74,8 @@ function build(lessonDates, subjectName = 'Latin') {
   lessonDates.forEach((d, i) => {
     Store.add('lessons', {
       curriculumId: cur.id, seq: i + 1, title: `Chapter ${i + 1}`,
-      date: d, minutes: 45, done: false, hidden: false, pinned: false, priority: 'normal', notes: ''
+      parts: Importer.makeParts([`Read ${i + 1}`, `Problems ${i + 1}`]),
+      date: d, minutes: 0, done: false, hidden: false, pinned: false, priority: 'normal', notes: ''
     });
   });
 
@@ -117,12 +118,14 @@ test('holidays are skipped', () => {
   eq(dates(cur), [WED]);
 });
 
-test('completed lessons never move', () => {
+test('a fully completed day never moves', () => {
   const { cur } = build([MON, TUE]);
   const first = Store.sequence(cur.id)[0];
-  Store.update('lessons', first.id, { done: true });
+  Store.partsOf(first).forEach(p => Store.togglePart(first.id, p.id, MON));
+  ok(Store.isLessonDone(Store.lesson(first.id)), 'all parts ticked');
+
   Scheduler.shiftCurriculum(cur.id, MON);
-  eq(dates(cur), [MON, WED]);   // done one stays; the other slides
+  eq(dates(cur), [MON, WED]);   // the finished day stays; the other slides
 });
 
 test('lessons before the trigger date are untouched', () => {
@@ -152,7 +155,8 @@ test('ONLY that curriculum shifts — other subjects do not move', () => {
   const mathsCur = Store.add('curricula', { childId: child.id, subjectId: maths.id, schoolYear: '2026-2027' });
   [MON, TUE, WED].forEach((d, i) => Store.add('lessons', {
     curriculumId: mathsCur.id, seq: i + 1, title: `Maths ${i + 1}`, date: d,
-    minutes: 45, done: false, hidden: false, pinned: false, priority: 'normal'
+    parts: Importer.makeParts([`Maths work ${i + 1}`]),
+    minutes: 0, done: false, hidden: false, pinned: false, priority: 'normal'
   }));
 
   Scheduler.shiftCurriculum(latinCur.id, MON);
@@ -257,16 +261,17 @@ test('today() uses the LOCAL date, not UTC (a classic evening bug)', () => {
 
 console.log('\nCurriculum import');
 
-test('a plain chapter list becomes lessons, in order', () => {
+test('a plain chapter list becomes one-assignment days, in order', () => {
   const { lessons } = Importer.parse('Chapter 1: Cells\nChapter 2: Genetics\nChapter 3: Evolution');
   eq(lessons.length, 3);
   eq(lessons.map(l => l.title), ['Chapter 1: Cells', 'Chapter 2: Genetics', 'Chapter 3: Evolution']);
-  eq(lessons[0].minutes, 45, 'sensible default duration');
+  eq(lessons[0].parts, ['Chapter 1: Cells'], 'a line with no separators is a one-assignment day');
 });
 
-test('pipes add minutes and notes', () => {
-  const { lessons } = Importer.parse('Chapter 3: Cells | 60 | Read pp. 20-34');
-  eq(lessons[0], { title: 'Chapter 3: Cells', minutes: 60, notes: 'Read pp. 20-34' });
+test('pipes split a day into separately tickable assignments', () => {
+  const { lessons } = Importer.parse('Chapter 3: Cells | Read pp. 20-34 | Problem set 3.1 | Campbell ch. 2');
+  eq(lessons[0].title, 'Chapter 3: Cells');
+  eq(lessons[0].parts, ['Read pp. 20-34', 'Problem set 3.1', 'Campbell ch. 2']);
 });
 
 test('blank lines are ignored', () => {
@@ -275,30 +280,48 @@ test('blank lines are ignored', () => {
 });
 
 test('a spreadsheet header row is skipped', () => {
-  const { lessons } = Importer.parse('Title, Minutes, Notes\nChapter 1, 30, intro');
+  const { lessons } = Importer.parse('Title, Assignment 1, Assignment 2\nChapter 1, Read pp.1-9, Questions');
   eq(lessons.length, 1);
   eq(lessons[0].title, 'Chapter 1');
-  eq(lessons[0].minutes, 30);
+  eq(lessons[0].parts, ['Read pp.1-9', 'Questions']);
 });
 
-test('a comma INSIDE a title is not mistaken for a column', () => {
-  // The trap. "Cells, tissues and organs" must stay one lesson, not become a
-  // lesson called "Cells" with garbage in the duration. Commas only split when
-  // what follows them is actually a number.
+test('tab-separated paste from Excel becomes assignments', () => {
+  const { lessons } = Importer.parse('Chapter 1\tRead pp. 1-18\tProblem set 1');
+  eq(lessons[0].title, 'Chapter 1');
+  eq(lessons[0].parts, ['Read pp. 1-18', 'Problem set 1']);
+});
+
+test('a comma INSIDE a title does not get split into assignments', () => {
+  // "Cells, tissues and organs" is a lesson title, not three assignments. A comma
+  // only splits when the input really looks like a spreadsheet.
   const { lessons } = Importer.parse('Cells, tissues and organs');
   eq(lessons.length, 1);
   eq(lessons[0].title, 'Cells, tissues and organs');
-  eq(lessons[0].minutes, 45);
+  eq(lessons[0].parts, ['Cells, tissues and organs']);
 });
 
-test('tab-separated paste from Excel works', () => {
-  const { lessons } = Importer.parse('Chapter 1\t30\tread first');
-  eq(lessons[0], { title: 'Chapter 1', minutes: 30, notes: 'read first' });
+test('a first lesson that mentions "chapter" and "problem" is NOT eaten as a header', () => {
+  // The bug this catches: a loose header check saw the words "Chapter" and "Problem"
+  // and silently discarded the user's first real lesson, with no error shown.
+  const { lessons } = Importer.parse(
+    'Chapter 3: Cells | Read pp. 20-34 | Problem set 3.1\nChapter 4: DNA | Read pp. 35-50');
+  eq(lessons.length, 2, 'both lessons survived');
+  eq(lessons[0].title, 'Chapter 3: Cells');
 });
 
-test('a nonsense duration falls back to the default instead of corrupting the lesson', () => {
-  const { lessons } = Importer.parse('Chapter 1 | banana');
-  eq(lessons[0].minutes, 45);
+test('empty trailing CSV columns do not become blank checkboxes', () => {
+  // A real CSV pads short rows with empty cells. Those must not become empty
+  // assignments that can never be ticked off -- the day would then never complete.
+  const csv = [
+    'Title,Assignment 1,Assignment 2,Assignment 3',
+    'Chapter 1,Read pp. 1-18,Questions 1-10,Lab video',
+    'Chapter 3: Photosynthesis,Read pp. 41-58,,'
+  ].join('\n');
+
+  const { lessons } = Importer.parse(csv);
+  eq(lessons.length, 2, 'the header was skipped');
+  eq(lessons[1].parts, ['Read pp. 41-58'], 'the two empty cells were dropped');
 });
 
 test('imported lessons land on consecutive SCHOOL days', () => {
@@ -313,7 +336,8 @@ test('imported lessons land on consecutive SCHOOL days', () => {
 test('replace wipes unfinished lessons but NEVER completed ones', () => {
   const { cur } = build([MON, TUE]);
   const first = Store.sequence(cur.id)[0];
-  Store.update('lessons', first.id, { done: true, title: 'ALREADY DONE' });
+  Store.update('lessons', first.id, { title: 'ALREADY DONE' });
+  Store.partsOf(first).forEach(p => Store.togglePart(first.id, p.id, MON));
 
   const { lessons } = Importer.parse('New A\nNew B');
   Importer.apply(cur.id, lessons, WED, 'replace');
@@ -343,6 +367,121 @@ test('a pinned lesson keeps its fixed date when the rest is laid out', () => {
   Importer.layOutIncomplete(cur.id, MON);
 
   eq(Store.sequence(cur.id)[2].date, FRI, 'the exam stayed on its fixed date');
+});
+
+/* ====================================================== MULTI-PART ASSIGNMENTS */
+
+console.log('\nMulti-part assignments');
+
+test('a day is done only when EVERY assignment is ticked', () => {
+  const { cur } = build([MON]);
+  const l = Store.sequence(cur.id)[0];
+  const parts = Store.partsOf(l);
+
+  Store.togglePart(l.id, parts[0].id, MON);
+  ok(!Store.isLessonDone(Store.lesson(l.id)), 'one of two ticked: not done');
+
+  Store.togglePart(l.id, parts[1].id, MON);
+  ok(Store.isLessonDone(Store.lesson(l.id)), 'both ticked: done');
+});
+
+test('a half-finished day carries ONLY the leftovers forward', () => {
+  // The whole point of parts. Read the chapter but not the problem set, and only
+  // the problem set should be owed tomorrow -- the reading must stay done.
+  const { cur } = build([MON, TUE]);
+  const l = Store.sequence(cur.id)[0];
+  const parts = Store.partsOf(l);
+
+  Store.togglePart(l.id, parts[0].id, MON);        // reading done, problems not
+  Scheduler.shiftCurriculum(cur.id, MON);
+
+  const moved = Store.lesson(l.id);
+  eq(moved.date, TUE, 'the unfinished day slid to Tuesday');
+
+  const after = Store.partsOf(moved);
+  ok(after[0].done, 'the reading is STILL done');
+  ok(!after[1].done, 'the problem set is still owed');
+  eq(Store.remainingParts(moved).length, 1, 'exactly one thing carried forward');
+});
+
+test('an untouched part is what makes the day shift at all', () => {
+  const { cur } = build([MON]);
+  const l = Store.sequence(cur.id)[0];
+  Store.partsOf(l).forEach(p => Store.togglePart(l.id, p.id, MON));
+
+  const before = Store.lesson(l.id).date;
+  Scheduler.rollForwardOverdue(TUE);              // pretend it is now Tuesday
+  eq(Store.lesson(l.id).date, before, 'a fully finished day is not dragged forward');
+});
+
+test('un-ticking a part re-opens the day', () => {
+  const { cur } = build([MON]);
+  const l = Store.sequence(cur.id)[0];
+  const parts = Store.partsOf(l);
+
+  parts.forEach(p => Store.togglePart(l.id, p.id, MON));
+  ok(Store.isLessonDone(Store.lesson(l.id)));
+
+  Store.togglePart(l.id, parts[0].id, MON);       // mis-tap, undo it
+  ok(!Store.isLessonDone(Store.lesson(l.id)), 'the day is open again');
+});
+
+test('working ahead: a future assignment can be ticked, and nothing reschedules', () => {
+  const { cur } = build([MON, TUE, WED]);
+  const future = Store.sequence(cur.id)[2];       // Wednesday's work
+
+  const datesBefore = dates(cur);
+  Store.partsOf(future).forEach(p => Store.togglePart(future.id, p.id, MON));  // done on Monday
+
+  ok(Store.isLessonDone(Store.lesson(future.id)), 'the future day is complete');
+  eq(dates(cur), datesBefore, 'finishing early rescheduled nothing');
+});
+
+test('a part completed early is recorded on the day it was ACTUALLY done', () => {
+  const { cur } = build([MON, TUE, WED]);
+  const future = Store.sequence(cur.id)[2];       // planned for Wednesday
+  const part = Store.partsOf(future)[0];
+
+  Store.togglePart(future.id, part.id, MON);      // but done on Monday
+
+  const rec = Store.portfolio().find(e => e.title === part.text);
+  eq(rec.date, MON, 'the portfolio says when the child did the work');
+  eq(rec.assignedDate, WED, 'and separately, when it was planned for');
+});
+
+test('every ticked assignment lands in the permanent portfolio', () => {
+  const { cur } = build([MON]);
+  const l = Store.sequence(cur.id)[0];
+  Store.partsOf(l).forEach(p => Store.togglePart(l.id, p.id, MON));
+
+  const recs = Store.portfolio().filter(e => e.category === 'Assignment');
+  eq(recs.length, 2, 'one record per assignment, not one per day');
+  eq(recs[0].subjectName, 'Latin', 'the subject NAME is stored, not just an id');
+});
+
+test('old single-checkbox lessons are migrated to a one-part day, keeping their tick', () => {
+  // Anyone who used the app before parts existed must not lose a term of work.
+  for (const k in memory) delete memory[k];
+  Store.load();
+  Store.replaceAll({
+    schemaVersion: 1, updatedAt: '', settings: { mode: 'School Year', schoolYear: '2026-2027' },
+    children: [], subjects: [], curricula: [],
+    lessons: [{
+      id: 'old1', curriculumId: 'c1', seq: 1, title: 'Chapter 1',
+      date: MON, done: true, hidden: false, pinned: false,
+      createdAt: '', updatedAt: '', deleted: false
+      // note: NO parts array at all
+    }],
+    habits: [], habitLog: [], tasks: [], portfolio: [], holidays: []
+  });
+
+  Store.load();                                    // triggers migrate()
+
+  const l = Store.lesson('old1');
+  eq(Store.partsOf(l).length, 1, 'it gained exactly one part');
+  eq(Store.partsOf(l)[0].text, 'Chapter 1', 'named after the lesson');
+  ok(Store.partsOf(l)[0].done, 'and it is still completed');
+  ok(Store.isLessonDone(l), 'so the day still reads as done');
 });
 
 /* ==================================================================== report */
