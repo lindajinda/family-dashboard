@@ -161,6 +161,7 @@ const Pages = (() => {
       </div>
       <div id="banner"></div>
       <div id="rows"></div>
+      <div id="habitBlock"></div>
     `));
 
     root.querySelector('#childPick').onclick = e => {
@@ -173,11 +174,16 @@ const Pages = (() => {
 
     const rows = root.querySelector('#rows');
 
+    // Habits belong on this page too — they are part of "today's work", and having
+    // to visit a second screen to tick off skin care is exactly the kind of friction
+    // that makes a tracker stop getting used.
+    renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
+
     if (!lessons.length) {
       rows.appendChild(h(`
         <div class="card empty">
           <div class="big">🎉</div>
-          <div>Nothing scheduled for ${esc(child ? child.name : '')} on this day.</div>
+          <div>No lessons scheduled for ${esc(child ? child.name : '')} on this day.</div>
         </div>`));
       return;
     }
@@ -275,6 +281,68 @@ const Pages = (() => {
         App.render();
       });
     }
+  }
+
+  /* --------------------------------------------- habits, inline on the Today page
+
+     Same data and same streak logic as the Habits page — just a compact strip, so
+     the whole of a child's day (lessons AND habits) is finishable from one screen.
+
+     Habits not due on the day being viewed are hidden here rather than dimmed. On
+     the Today page the question is "what is left to do", and a weekday-only habit
+     on a Saturday is not left to do — it isn't owed. The full picture, including
+     rest days, is on the Habits page. */
+
+  function renderHabitsFor(mount, childId, date) {
+    const list = Store.habits()
+      .filter(x => x.childId === childId)
+      .filter(x => Habits.isDue(x, date));
+
+    if (!list.length) return;
+
+    const done = list.filter(x => Habits.isDone(x.id, date)).length;
+
+    const card = h(`
+      <div class="card" style="margin-top:22px">
+        <div class="flex" style="margin-bottom:14px">
+          <h2 style="margin:0">Daily habits</h2>
+          <span class="chip ${done === list.length ? 'chip-good' : ''}">${done} of ${list.length} done</span>
+          <button class="btn btn-sm right" data-go="habits">Streaks &amp; history &rarr;</button>
+        </div>
+        <div class="flex wrap" id="hb" style="gap:10px"></div>
+      </div>
+    `).firstElementChild;
+
+    const wrap = card.querySelector('#hb');
+
+    list.forEach(hb => {
+      const on = Habits.isDone(hb.id, date);
+      const st = Habits.stats(hb, date);
+
+      // one big tap target per habit — no menus, no confirmation
+      const btn = h(`
+        <button class="btn" style="
+            min-height:56px; padding:10px 16px; gap:12px;
+            border-color:${on ? esc(hb.color) : 'var(--border-2)'};
+            background:${on ? esc(hb.color) : 'var(--surface)'};
+            color:${on ? '#fff' : 'var(--text)'};">
+          <span class="check ${on ? 'on' : ''}" style="
+              width:24px;height:24px;flex:0 0 24px;font-size:14px;pointer-events:none;
+              ${on ? 'background:#fff;border-color:#fff;color:' + esc(hb.color) : ''}">✓</span>
+          <span style="text-align:left">
+            <span style="display:block;font-weight:600">${esc(hb.icon || '')} ${esc(hb.name)}</span>
+            <span style="display:block;font-size:12px;opacity:.8">
+              ${st.current > 0 ? '🔥 ' + st.current + ' day streak' : 'No streak yet'}
+            </span>
+          </span>
+        </button>
+      `).firstElementChild;
+
+      btn.onclick = () => { Habits.toggle(hb.id, date); App.render(); };
+      wrap.appendChild(btn);
+    });
+
+    mount.appendChild(card);
   }
 
   /* ================================================================= HABITS */

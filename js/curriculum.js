@@ -154,9 +154,12 @@ const CurriculumPage = (() => {
 
     Modal.open(`Add lessons to ${subject.name}`, `
       <div class="small muted" style="margin-bottom:12px">
-        One lesson per line. Paste straight from a book's contents page, a syllabus or a spreadsheet column.<br>
-        Optionally add minutes and notes after a <b>|</b> &nbsp;—&nbsp; e.g.
-        <code>Chapter 3: Cells | 45 | Read pp. 20-34</code>
+        <b>One lesson per line.</b> Paste straight from a book's contents page, a syllabus,
+        or a column in Excel.<br>
+        Minutes and notes are optional — add them after a <b>|</b> or a comma:<br>
+        <code>Chapter 3: Cells | 60 | Read pp. 20-34</code><br>
+        Anything without a duration is assumed to be 45 minutes.
+        <a href="#" id="tmpl">Download a CSV template</a>
       </div>
 
       <div class="field">
@@ -193,6 +196,24 @@ Chapter 3: Photosynthesis | 60 | Watch the lab video first">${esc(prefill || '')
     }, () => {
       const txt = document.querySelector('#txt');
       const prev = document.querySelector('#preview');
+
+      // Generated here rather than linked as a file, so it works identically whether
+      // the app is opened from disk or served from GitHub Pages.
+      document.querySelector('#tmpl').onclick = e => {
+        e.preventDefault();
+        const csv = [
+          'Title,Minutes,Notes',
+          'Chapter 1: Introduction,45,Read pp. 1-18',
+          'Chapter 2: The Cell,60,Watch the lab video first',
+          'Chapter 3: Photosynthesis,60,',
+          'Unit 1 Exam,60,Tick "fixed date" after importing so it never moves'
+        ].join('\n');
+
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        a.download = 'curriculum-template.csv';
+        a.click();
+      };
 
       const update = () => {
         const { lessons } = Importer.parse(txt.value);
