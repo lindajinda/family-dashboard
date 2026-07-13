@@ -175,9 +175,10 @@ const Pages = (() => {
         </div>
       </div>
       <div id="banner"></div>
-      <div id="rows"></div>
-      <div id="ahead"></div>
       <div id="habitBlock"></div>
+      <div id="rows"></div>
+      <div id="taskBlock"></div>
+      <div id="ahead"></div>
     `));
 
     root.querySelector('#childPick').onclick = e => {
@@ -188,7 +189,12 @@ const Pages = (() => {
     root.querySelector('#nextDay').onclick = () => { todayDate = Store.addDays(date, 1); App.render(); };
     root.querySelector('#goToday').onclick = () => { todayDate = Store.today(); App.render(); };
 
+    // Habits first. They are the quick wins that start the day, they take seconds,
+    // and burying them under an hour of academic work is how they stop happening.
+    renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
+
     const rows = root.querySelector('#rows');
+    rows.appendChild(h(`<h2 style="margin:22px 0 12px">Schoolwork</h2>`));
 
     if (!lessons.length) {
       rows.appendChild(h(`
@@ -200,8 +206,91 @@ const Pages = (() => {
       lessons.forEach(l => rows.appendChild(lessonCard(l, date)));
     }
 
+    renderTasksFor(root.querySelector('#taskBlock'), todayChild, date);
     renderWorkAhead(root.querySelector('#ahead'), todayChild, date);
-    renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
+  }
+
+  /* ------------------------------------------------------------ one-time tasks
+
+     Appointments, forms, purchases. Shown on Today so nothing lives only on a page
+     nobody visits.
+
+     What is shown: anything overdue, anything due today, and anything due in the
+     next week. Not the whole task list — a task due in March is not today's problem,
+     and a Today page that cries wolf gets ignored. */
+
+  function renderTasksFor(mount, childId, date) {
+    const horizon = Store.addDays(date, 7);
+
+    const mine = Store.tasks()
+      .filter(t => !t.done)
+      .filter(t => t.childId === childId || !t.childId)   // theirs, plus family tasks
+      .filter(t => t.due && t.due <= horizon)
+      .sort((a, b) => a.due.localeCompare(b.due));
+
+    if (!mine.length) return;
+
+    const overdue = mine.filter(t => t.due < date).length;
+
+    const card = h(`
+      <div class="card" style="margin-top:22px">
+        <div class="flex" style="margin-bottom:12px">
+          <h2 style="margin:0">Tasks &amp; deadlines</h2>
+          ${overdue ? `<span class="chip chip-high">${overdue} overdue</span>` : ''}
+          <span class="chip">${mine.length} in the next week</span>
+          <button class="btn btn-sm right" data-go="tasks">All tasks &rarr;</button>
+        </div>
+        <div id="tl" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    `).firstElementChild;
+
+    const list = card.querySelector('#tl');
+
+    mine.forEach(t => {
+      const late = t.due < date;
+      const isToday = t.due === date;
+      const family = !t.childId;
+
+      const row = h(`
+        <label class="flex" style="
+            gap:12px; cursor:pointer; padding:10px 12px; border-radius:8px;
+            border:1px solid ${late ? '#F5C6C2' : 'var(--border)'};
+            background:${late ? 'rgba(196,43,28,.05)' : 'var(--surface)'};">
+          <span class="check" style="width:26px;height:26px;flex:0 0 26px;font-size:15px">&#10003;</span>
+          <span style="flex:1;min-width:0">
+            <span style="display:block;font-weight:500">${esc(t.title)}</span>
+            ${t.description ? `<span class="small muted">${esc(t.description)}</span>` : ''}
+          </span>
+          ${family ? '<span class="chip">Family</span>' : ''}
+          ${t.priority === 'high' ? '<span class="chip chip-high">High</span>' : ''}
+          <span class="chip ${late ? 'chip-high' : (isToday ? 'chip-warn' : '')}">
+            ${late ? 'Overdue &middot; ' : (isToday ? 'Today' : '')}${isToday ? '' : esc(fmtShort(t.due))}
+          </span>
+        </label>
+      `).firstElementChild;
+
+      row.onclick = e => {
+        e.preventDefault();
+        Store.update('tasks', t.id, { done: true });
+
+        const c = Store.child(t.childId);
+        Store.recordCompletion({
+          kind: 'task',
+          childId: t.childId,
+          childName: c ? c.name : 'Family',
+          title: t.title,
+          category: 'One-time task',
+          date: Store.today(),
+          minutes: 0
+        });
+
+        App.render();
+      };
+
+      list.appendChild(row);
+    });
+
+    mount.appendChild(card);
   }
 
   function banner(msg) {
