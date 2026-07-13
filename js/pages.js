@@ -23,7 +23,7 @@ const Pages = (() => {
     root.appendChild(h(`
       <div class="page-head">
         <div>
-          <h1>Family Dashboard</h1>
+          <h1>Overview</h1>
           <div class="sub">${esc(fmtDay(today))} &middot; ${esc(Store.settings.mode)} &middot; ${esc(Store.settings.schoolYear)}</div>
         </div>
         <button class="btn btn-primary btn-lg" data-go="today">Start today's work &rarr;</button>
@@ -54,11 +54,11 @@ const Pages = (() => {
     const tasksDue = Store.tasks().filter(t => !t.done && t.due && t.due <= Store.addDays(today, 7));
 
     root.appendChild(h(`
-      <div class="grid grid-4" style="margin-bottom:18px">
+      <div class="grid grid-4" style="margin-bottom:10px">
         <div class="card stat">
           <div class="n">${partsDone}/${parts}</div>
           <div class="l">Assignments done today</div>
-          <div class="bar mt" style="margin-top:8px"><i style="width:${pct(partsDone, parts)}%"></i></div>
+          <div class="bar" style="margin-top:5px"><i style="width:${pct(partsDone, parts)}%"></i></div>
         </div>
         <div class="card stat">
           <div class="n">${allDone}/${allLessons.length}</div>
@@ -89,17 +89,17 @@ const Pages = (() => {
 
       const card = h(`
         <div class="card">
-          <div class="flex" style="margin-bottom:14px">
-            <span style="width:12px;height:12px;border-radius:50%;background:${esc(child.color)}"></span>
+          <div class="flex" style="margin-bottom:8px">
+            <span style="width:10px;height:10px;border-radius:50%;background:${esc(child.color)}"></span>
             <h2 style="margin:0;color:${esc(child.color)}">${esc(child.name)}</h2>
             ${done === lessons.length && lessons.length ? '<span class="chip chip-good right">All done</span>' : ''}
           </div>
 
           <div class="small muted">Lessons &middot; ${done} of ${lessons.length}</div>
-          <div class="bar" style="margin:6px 0 14px"><i style="width:${pct(done, lessons.length)}%;background:${esc(child.color)}"></i></div>
+          <div class="bar" style="margin:4px 0 8px"><i style="width:${pct(done, lessons.length)}%;background:${esc(child.color)}"></i></div>
 
           <div class="small muted">Habits &middot; ${hdone} of ${due.length}</div>
-          <div class="bar" style="margin:6px 0 14px"><i style="width:${pct(hdone, due.length)}%;background:${esc(child.color)}"></i></div>
+          <div class="bar" style="margin:4px 0 8px"><i style="width:${pct(hdone, due.length)}%;background:${esc(child.color)}"></i></div>
 
           <div class="flex small muted">
             <span>🔥 Best streak: <b>${best}</b> day${best === 1 ? '' : 's'}</span>
@@ -114,12 +114,12 @@ const Pages = (() => {
 
     // ---- upcoming ----
     if (tasksDue.length) {
-      const list = h(`<div class="card" style="margin-top:18px"><h2>Upcoming deadlines</h2></div>`).firstElementChild;
+      const list = h(`<div class="card" style="margin-top:10px"><h2>Upcoming deadlines</h2></div>`).firstElementChild;
       tasksDue.sort((a, b) => a.due.localeCompare(b.due)).forEach(t => {
         const child = Store.child(t.childId);
         const late = t.due < today;
         list.appendChild(h(`
-          <div class="flex" style="padding:8px 0;border-top:1px solid var(--border)">
+          <div class="flex" style="padding:5px 0;border-top:1px solid var(--border)">
             <span>${esc(t.title)}</span>
             <span class="chip" style="margin-left:8px">${esc(child ? child.name : 'Family')}</span>
             <span class="right chip ${late ? 'chip-high' : 'chip-warn'}">${esc(fmtShort(t.due))}</span>
@@ -155,9 +155,9 @@ const Pages = (() => {
     });
 
     root.appendChild(h(`
-      <div class="page-head" style="margin-bottom:12px">
+      <div class="page-head" style="margin-bottom:8px">
         <div>
-          <h1 style="font-size:22px">Daily Schedule</h1>
+          <h1>Today</h1>
           <div class="sub" style="margin-bottom:0">${esc(fmtDay(date))}${date === Store.today() ? '' : ' &middot; not today'}</div>
         </div>
         <div class="segment" id="childPick">
@@ -165,10 +165,10 @@ const Pages = (() => {
         </div>
       </div>
 
-      <div class="flex wrap" style="margin-bottom:12px">
-        <button class="btn btn-icon" id="prevDay" title="Previous day" style="min-height:34px;min-width:34px">&lsaquo;</button>
-        <button class="btn" id="goToday" style="min-height:34px;padding:4px 14px">Today</button>
-        <button class="btn btn-icon" id="nextDay" title="Next day" style="min-height:34px;min-width:34px">&rsaquo;</button>
+      <div class="flex wrap" style="margin-bottom:8px">
+        <button class="btn btn-icon" id="prevDay" title="Previous day">&lsaquo;</button>
+        <button class="btn" id="goToday">Today</button>
+        <button class="btn btn-icon" id="nextDay" title="Next day">&rsaquo;</button>
         <div class="right" style="min-width:240px">
           <div class="small muted">${partsDone} of ${parts} assignment${parts === 1 ? '' : 's'} done</div>
           <div class="bar" style="margin-top:4px"><i style="width:${pct(partsDone, parts)}%"></i></div>
@@ -233,9 +233,9 @@ const Pages = (() => {
     const overdue = mine.filter(t => t.due < date).length;
 
     const card = h(`
-      <div class="card" style="margin-top:14px;padding:12px 14px">
-        <div class="flex" style="margin-bottom:8px">
-          <h2 style="margin:0;font-size:15px">Tasks &amp; deadlines</h2>
+      <div class="card" style="margin-top:10px;padding:8px 10px">
+        <div class="flex" style="margin-bottom:6px">
+          <h2 style="margin:0;font-size:13px">Tasks &amp; deadlines</h2>
           ${overdue ? `<span class="chip chip-high">${overdue} overdue</span>` : ''}
           <span class="chip">${mine.length} in the next week</span>
           <button class="btn btn-sm right" data-go="tasks">All tasks &rarr;</button>
@@ -253,10 +253,10 @@ const Pages = (() => {
 
       const row = h(`
         <label class="flex" style="
-            gap:12px; cursor:pointer; padding:10px 12px; border-radius:8px;
+            gap:9px; cursor:pointer; padding:6px 9px; border-radius:6px;
             border:1px solid ${late ? '#F5C6C2' : 'var(--border)'};
             background:${late ? 'rgba(196,43,28,.05)' : 'var(--surface)'};">
-          <span class="check" style="width:26px;height:26px;flex:0 0 26px;font-size:15px">&#10003;</span>
+          <span class="check" style="width:20px;height:20px;flex:0 0 20px;font-size:12px">&#10003;</span>
           <span style="flex:1;min-width:0">
             <span style="display:block;font-weight:500">${esc(t.title)}</span>
             ${t.description ? `<span class="small muted">${esc(t.description)}</span>` : ''}
@@ -418,9 +418,9 @@ const Pages = (() => {
     if (!upcoming.length) return;
 
     const card = h(`
-      <div class="card" style="margin-top:14px;padding:12px 14px">
+      <div class="card" style="margin-top:10px;padding:8px 10px">
         <div class="flex">
-          <h2 style="margin:0;font-size:15px">Work ahead</h2>
+          <h2 style="margin:0;font-size:13px">Work ahead</h2>
           <span class="chip">${upcoming.length} coming up</span>
           <button class="btn btn-sm right" id="toggle">${workAhead ? 'Hide' : 'Show'}</button>
         </div>

@@ -69,10 +69,12 @@ const Reports = (() => {
 const App = (() => {
   'use strict';
 
+  // Today first, and it is where you land. It is the page you actually work from
+  // every day; the Overview is a summary you glance at, not a place you start.
   const NAV = [
-    { id: 'dashboard', label: 'Home',       icon: '🏠' },
     { id: 'today',     label: 'Today',      icon: '📅' },
     { id: 'habits',    label: 'Habits',     icon: '✅' },
+    { id: 'dashboard', label: 'Overview',   icon: '🏠' },
     { sep: true },
     { id: 'curriculum',label: 'Curriculum', icon: '📖' },
     { id: 'subjects',  label: 'Subjects',   icon: '📚' },
@@ -82,7 +84,7 @@ const App = (() => {
     { id: 'settings',  label: 'Settings',   icon: '⚙️' }
   ];
 
-  let page = 'dashboard';
+  let page = 'today';
 
   function go(id, opts) {
     page = id;
@@ -111,7 +113,7 @@ const App = (() => {
     };
 
     main.innerHTML = '';
-    const view = page === 'curriculum' ? CurriculumPage.render : (Pages[page] || Pages.dashboard);
+    const view = page === 'curriculum' ? CurriculumPage.render : (Pages[page] || Pages.today);
     view(main);
 
     // let any page put a "go to page" button anywhere
