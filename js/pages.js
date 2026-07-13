@@ -194,7 +194,7 @@ const Pages = (() => {
     renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
 
     const rows = root.querySelector('#rows');
-    rows.appendChild(h(`<h2 style="margin:10px 0 6px;font-size:13px">Schoolwork</h2>`));
+    rows.appendChild(h(`<h2 style="margin:8px 0 4px;font-size:12px">Schoolwork</h2>`));
 
     if (!lessons.length) {
       rows.appendChild(h(`
@@ -233,9 +233,9 @@ const Pages = (() => {
     const overdue = mine.filter(t => t.due < date).length;
 
     const card = h(`
-      <div class="card" style="margin-top:10px;padding:8px 10px">
-        <div class="flex" style="margin-bottom:6px">
-          <h2 style="margin:0;font-size:13px">Tasks &amp; deadlines</h2>
+      <div class="card" style="margin-top:8px;padding:6px 8px">
+        <div class="flex" style="margin-bottom:4px">
+          <h2 style="margin:0;font-size:12px">Tasks &amp; deadlines</h2>
           ${overdue ? `<span class="chip chip-high">${overdue} overdue</span>` : ''}
           <span class="chip">${mine.length} in the next week</span>
           <button class="btn btn-sm right" data-go="tasks">All tasks &rarr;</button>
@@ -253,10 +253,10 @@ const Pages = (() => {
 
       const row = h(`
         <label class="flex" style="
-            gap:9px; cursor:pointer; padding:6px 9px; border-radius:6px;
+            gap:8px; cursor:pointer; padding:4px 8px; border-radius:5px;
             border:1px solid ${late ? '#F5C6C2' : 'var(--border)'};
             background:${late ? 'rgba(196,43,28,.05)' : 'var(--surface)'};">
-          <span class="check" style="width:20px;height:20px;flex:0 0 20px;font-size:12px">&#10003;</span>
+          <span class="check" style="width:17px;height:17px;flex:0 0 17px;font-size:11px">&#10003;</span>
           <span style="flex:1;min-width:0">
             <span style="display:block;font-weight:500">${esc(t.title)}</span>
             ${t.description ? `<span class="small muted">${esc(t.description)}</span>` : ''}
@@ -316,7 +316,7 @@ const Pages = (() => {
     // glance. Every extra pixel of padding is one fewer assignment on screen.
     const card = h(`
       <div class="row ${allDone ? 'is-done' : ''}"
-           style="align-items:stretch; padding:9px 12px; margin-bottom:6px; gap:10px">
+           style="align-items:stretch; padding:6px 9px; margin-bottom:4px; gap:8px">
         <div class="stripe" style="background:${esc(s.color)}"></div>
         <div class="row-main">
           <div class="flex wrap" style="gap:8px">
@@ -328,16 +328,14 @@ const Pages = (() => {
             ${l.pinned ? '<span class="chip chip-info" style="padding:1px 7px;font-size:11px">&#128204; Fixed</span>' : ''}
           </div>
 
-          <div class="parts" style="margin-top:6px;display:flex;flex-direction:column;gap:4px"></div>
+          <div class="parts" style="margin-top:4px;display:flex;flex-direction:column;gap:3px"></div>
 
           ${l.notes ? `<div class="small muted" style="margin-top:5px">${esc(l.notes)}</div>` : ''}
         </div>
 
         <div class="row-actions" style="align-items:flex-start;gap:6px">
-          <button class="btn btn-sm" data-act="move" ${allDone ? 'disabled' : ''}
-                  style="min-height:30px;padding:3px 10px;font-size:12px">Move &rarr;</button>
-          <button class="btn btn-sm btn-icon" data-act="note" title="Notes"
-                  style="min-height:30px;min-width:30px;padding:3px">&#128221;</button>
+          <button class="btn btn-sm" data-act="move" ${allDone ? 'disabled' : ''}>Move &rarr;</button>
+          <button class="btn btn-sm btn-icon" data-act="note" title="Notes">&#128221;</button>
         </div>
       </div>
     `).firstElementChild;
@@ -347,11 +345,11 @@ const Pages = (() => {
     parts.forEach(p => {
       const line = h(`
         <label class="flex" style="
-            gap:9px; cursor:pointer; padding:5px 9px; border-radius:6px; font-size:13px;
+            gap:8px; cursor:pointer; padding:3px 7px; border-radius:5px; font-size:12px;
             border:1px solid var(--border);
             background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
           <span class="check ${p.done ? 'on' : ''}"
-                style="width:20px;height:20px;flex:0 0 20px;font-size:12px;border-radius:5px">&#10003;</span>
+                style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:4px">&#10003;</span>
           <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
         </label>
       `).firstElementChild;
@@ -418,9 +416,9 @@ const Pages = (() => {
     if (!upcoming.length) return;
 
     const card = h(`
-      <div class="card" style="margin-top:10px;padding:8px 10px">
+      <div class="card" style="margin-top:8px;padding:6px 8px">
         <div class="flex">
-          <h2 style="margin:0;font-size:13px">Work ahead</h2>
+          <h2 style="margin:0;font-size:12px">Work ahead</h2>
           <span class="chip">${upcoming.length} coming up</span>
           <button class="btn btn-sm right" id="toggle">${workAhead ? 'Hide' : 'Show'}</button>
         </div>
@@ -442,8 +440,8 @@ const Pages = (() => {
       const doneCount = parts.filter(p => p.done).length;
 
       const block = h(`
-        <div style="padding:8px 0;border-top:1px solid var(--border)">
-          <div class="flex wrap" style="margin-bottom:5px;gap:8px">
+        <div style="padding:5px 0;border-top:1px solid var(--border)">
+          <div class="flex wrap" style="margin-bottom:3px;gap:7px">
             <span style="width:10px;height:10px;border-radius:3px;background:${esc(s.color)}"></span>
             <b style="color:${esc(s.color)};font-size:13px">${esc(s.name)}</b>
             <span class="muted small">${esc(lesson.title)}</span>
@@ -462,11 +460,11 @@ const Pages = (() => {
       parts.forEach(p => {
         const line = h(`
           <label class="flex" style="
-              gap:9px; cursor:pointer; padding:5px 9px; border-radius:6px;
+              gap:8px; cursor:pointer; padding:3px 7px; border-radius:5px;
               border:1px solid var(--border);
               background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
             <span class="check ${p.done ? 'on' : ''}"
-                  style="width:20px;height:20px;flex:0 0 20px;font-size:12px;border-radius:5px">&#10003;</span>
+                  style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:4px">&#10003;</span>
             <span class="small" style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
           </label>`).firstElementChild;
 
@@ -513,9 +511,9 @@ const Pages = (() => {
     // section you study — so they get one tight row, and the streak sits inline
     // rather than on a second line doubling the height of every button.
     const card = h(`
-      <div class="card" style="padding:8px 10px">
-        <div class="flex" style="margin-bottom:6px">
-          <h2 style="margin:0;font-size:13px">Daily habits</h2>
+      <div class="card" style="padding:6px 8px">
+        <div class="flex" style="margin-bottom:4px">
+          <h2 style="margin:0;font-size:12px">Daily habits</h2>
           <span class="chip ${done === list.length ? 'chip-good' : ''}">${done}/${list.length}</span>
           <button class="btn btn-sm right" data-go="habits" style="min-height:28px;padding:2px 10px">Streaks &rarr;</button>
         </div>
@@ -535,7 +533,7 @@ const Pages = (() => {
 
       const btn = h(`
         <button class="btn" style="
-            min-height:36px; padding:5px 12px; gap:8px; font-size:13px; border-radius:18px;
+            min-height:28px; padding:3px 10px; gap:7px; font-size:12px; border-radius:16px;
             border-color:${on ? esc(hb.color) : 'var(--border-2)'};
             background:${on ? esc(hb.color) : 'var(--surface)'};
             color:${on ? '#fff' : 'var(--text)'};">
@@ -578,7 +576,7 @@ const Pages = (() => {
       const allDone = doneCount === parts.length && parts.length > 0;
 
       const block = h(`
-        <div style="margin-top:5px;padding:6px 8px;border-radius:7px;
+        <div style="margin-top:4px;padding:5px 7px;border-radius:6px;
              border:1px solid ${allDone ? esc(hb.color) : 'var(--border)'};
              background:var(--surface);">
           <div class="flex wrap" style="gap:6px;margin-bottom:4px">
@@ -721,11 +719,11 @@ const Pages = (() => {
         (entry.parts || []).forEach(p => {
           const line = h(`
             <label class="flex" style="
-                gap:7px;cursor:pointer;padding:4px 9px;border-radius:14px;font-size:12px;
+                gap:6px;cursor:pointer;padding:2px 8px;border-radius:12px;font-size:11px;
                 border:1px solid var(--border);
                 background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
               <span class="check ${p.done ? 'on' : ''}"
-                    style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:5px">&#10003;</span>
+                    style="width:15px;height:15px;flex:0 0 15px;font-size:10px;border-radius:4px">&#10003;</span>
               <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
             </label>`).firstElementChild;
 

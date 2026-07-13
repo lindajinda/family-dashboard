@@ -31,7 +31,7 @@
   --shadow:        0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.06);
   --shadow-lg:     0 2px 4px rgba(0,0,0,.06), 0 8px 20px rgba(0,0,0,.10);
 
-  --nav-w:         210px;
+  --nav-w:         188px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -60,8 +60,8 @@ body {
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.35;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -96,8 +96,8 @@ body {
 }
 
 .nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px;
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 9px;
   border-radius: var(--radius);
   color: var(--text);
   cursor: pointer;
@@ -113,24 +113,24 @@ body {
   content: ''; position: absolute; left: 0; top: 20%; height: 60%;
   width: 3px; border-radius: 2px; background: var(--accent);
 }
-.nav-item .ico { width: 20px; text-align: center; font-size: 16px; }
+.nav-item .ico { width: 18px; text-align: center; font-size: 14px; }
 .nav-sep { height: 1px; background: var(--border); margin: 6px 8px; }
 .nav-label {
   font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
   color: var(--text-3); padding: 8px 10px 4px; font-weight: 600;
 }
 
-.main { flex: 1; min-width: 0; padding: 14px 20px 32px; }
+.main { flex: 1; min-width: 0; padding: 10px 16px 28px; }
 
 /* ------------------------------------------------------------------ headings */
 
 .page-head {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 12px; margin-bottom: 10px; flex-wrap: wrap;
+  gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
 }
-h1 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
-.sub { color: var(--text-2); font-size: 12px; margin-top: 1px; }
-h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+h1 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.sub { color: var(--text-2); font-size: 11px; margin-top: 0; }
+h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
 /* -------------------------------------------------------------------- cards */
 
@@ -138,20 +138,20 @@ h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 10px 12px;
+  padding: 8px 10px;
   box-shadow: var(--shadow);
 }
-.card + .card { margin-top: 10px; }
+.card + .card { margin-top: 8px; }
 
-.grid { display: grid; gap: 10px; }
+.grid { display: grid; gap: 8px; }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.grid-4 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 
 /* ------------------------------------------------------------------ buttons */
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 32px; padding: 5px 12px;
+  min-height: 28px; padding: 3px 10px;
   border-radius: var(--radius);
   border: 1px solid var(--border-2);
   background: var(--surface);
@@ -166,28 +166,28 @@ h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 
 .btn-primary {
   background: var(--accent); border-color: var(--accent); color: #fff;
-  min-height: 34px; font-weight: 600;
+  min-height: 30px; font-weight: 600;
 }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 
 .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
 .btn-green:hover { filter: brightness(1.08); }
 
-.btn-lg { min-height: 36px; padding: 7px 16px; font-size: 13px; }
-.btn-sm { min-height: 26px; padding: 2px 9px; font-size: 12px; }
-.btn-icon { min-width: 32px; padding: 5px; }
+.btn-lg { min-height: 32px; padding: 5px 14px; font-size: 12px; }
+.btn-sm { min-height: 23px; padding: 1px 8px; font-size: 11px; }
+.btn-icon { min-width: 28px; padding: 3px; }
 .btn-danger { color: var(--red); border-color: var(--border-2); }
 .btn-danger:hover { background: #FDF3F2; }
 
 /* ---------------------------------------------------------------- lesson row */
 
 .row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   transition: box-shadow .12s, opacity .12s;
 }
 .row:hover { box-shadow: var(--shadow-lg); }
@@ -198,19 +198,19 @@ h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 
 .row-main { flex: 1; min-width: 0; }
 .row-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 1px; }
-.row-subject { font-weight: 600; font-size: 13px; }
-.row-title { font-size: 13px; }
+.row-subject { font-weight: 600; font-size: 12px; }
+.row-title { font-size: 12px; }
 .row-actions { display: flex; gap: 5px; flex-shrink: 0; }
 
 /* big, obvious checkbox — one click to complete */
 .check {
-  width: 24px; height: 24px; flex: 0 0 24px;
+  width: 20px; height: 20px; flex: 0 0 20px;
   border: 2px solid var(--border-2);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--surface);
   cursor: pointer;
   display: grid; place-items: center;
-  color: transparent; font-size: 13px; font-weight: 700;
+  color: transparent; font-size: 12px; font-weight: 700;
   transition: all .12s;
 }
 .check:hover { border-color: var(--accent); }
@@ -222,8 +222,8 @@ h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 1px 7px; border-radius: 999px;
-  font-size: 11px; font-weight: 600;
+  padding: 0 6px; border-radius: 999px;
+  font-size: 10px; font-weight: 600;
   background: var(--surface-2); color: var(--text-2);
   border: 1px solid var(--border);
 }
@@ -239,11 +239,11 @@ h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 
 /* ------------------------------------------------------------------ progress */
 
-.bar { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.bar { height: 5px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s; }
 
 .stat { display: flex; flex-direction: column; gap: 4px; }
-.stat .n { font-size: 20px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+.stat .n { font-size: 18px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
 .stat .l { font-size: 11px; color: var(--text-2); }
 
 /* -------------------------------------------------------------------- forms */
@@ -251,8 +251,8 @@ h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 input[type="text"], input[type="date"], input[type="number"],
 select, textarea {
   width: 100%;
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: 30px;
+  padding: 5px 9px;
   border: 1px solid var(--border-2);
   border-radius: var(--radius);
   background: var(--surface);
@@ -263,7 +263,7 @@ input:focus, select:focus, textarea:focus {
   outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent);
 }
 label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
-.field { margin-bottom: 10px; }
+.field { margin-bottom: 8px; }
 
 /* ------------------------------------------------------------------ segments */
 
@@ -296,7 +296,7 @@ label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
 .mt { margin-top: 16px; }
 
 table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--border); }
+th, td { text-align: left; padding: 4px 7px; border-bottom: 1px solid var(--border); }
 th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); }
 tbody tr:hover { background: var(--surface-2); }
 
