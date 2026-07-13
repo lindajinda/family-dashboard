@@ -104,8 +104,12 @@ const App = (() => {
              <span class="ico">${n.icon}</span> ${n.label}
            </button>`).join('')}
       <div style="flex:1"></div>
-      <div class="nav-label">Saved locally</div>
+      <button class="nav-item" data-p="settings" id="syncPill" style="font-size:11px;color:var(--text-2)">
+        <span class="ico" id="syncDot">•</span> <span id="syncText">Saved locally</span>
+      </button>
     `;
+
+    paintSync();
 
     nav.onclick = e => {
       const b = e.target.closest('.nav-item');
@@ -122,6 +126,25 @@ const App = (() => {
     });
   }
 
+  /** The sidebar tells you, at a glance, whether your work is safe. */
+  function paintSync() {
+    const dot = document.querySelector('#syncDot');
+    const txt = document.querySelector('#syncText');
+    if (!dot || !txt) return;
+
+    const st = Sync.status();
+    const look = {
+      off:     ['•', 'Saved locally',  'var(--text-3)'],
+      syncing: ['↻', 'Syncing…',       'var(--accent)'],
+      ok:      ['✓', 'Synced',         'var(--green)'],
+      error:   ['!', 'Sync problem',   'var(--red)']
+    }[st.status] || ['•', 'Saved locally', 'var(--text-3)'];
+
+    dot.textContent = look[0];
+    txt.textContent = look[1];
+    dot.style.color = look[2];
+  }
+
   function boot() {
     Store.load();
 
@@ -130,8 +153,12 @@ const App = (() => {
     const moved = Scheduler.rollForwardOverdue(Store.today());
     if (moved.length) console.info(`Rolled ${moved.length} overdue lesson group(s) forward.`);
 
-    Store.onChange(() => {});
     render();
+
+    // Sync runs itself from here: once now, after every change, whenever the tab
+    // regains focus, and every few minutes.
+    Sync.onStatus(paintSync);
+    Sync.start();
   }
 
   return { go, render, boot };

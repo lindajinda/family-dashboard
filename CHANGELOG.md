@@ -17,10 +17,21 @@
   is permanent.
 - 11 more tests (29 total).
 
+## [0.3.0] - 2026-07-12
+
+### Added
+- **Automatic sync between computers.** Your data is committed as JSON to a *private*
+  GitHub repository you own. Every computer reads it, merges its own changes, and writes
+  back — on every change, when the tab regains focus, and every five minutes. Free, no
+  server, and because it is git you get a full version history.
+- Set-up walkthrough in Settings, and a live sync status in the sidebar.
+- 11 merge tests covering the ways a sync can silently destroy data.
+- Multi-part assignments, work-ahead, habit daily plans, per-subject days of the week,
+  icon pickers, subject reordering, and a much denser UI (see git log).
+
 ## [Unreleased]
 
 Next up, in order:
-- Automatic sync (data committed to a private GitHub repo, so every computer agrees)
 - Weekly planner with drag-and-drop
 - Charts and the statistics dashboard
 - PDF and Excel reports; the lifetime portfolio PDF

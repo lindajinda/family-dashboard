@@ -1321,6 +1321,11 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       </div>
 
       <div class="card">
+        <h2>Sync between computers</h2>
+        <div id="syncBox"></div>
+      </div>
+
+      <div class="card">
         <h2>Backup</h2>
         <div class="sub" style="margin-bottom:12px">Your data lives in this browser. Download a copy any time — it is a plain JSON file.</div>
         <div class="flex wrap">
@@ -1336,6 +1341,8 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
         <button class="btn btn-danger" id="reset">Reset all data</button>
       </div>
     `));
+
+    renderSync(root.querySelector('#syncBox'));
 
     root.querySelector('#mode').onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -1366,6 +1373,135 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     };
     root.querySelector('#reset').onclick = () => {
       if (confirm('Erase everything and start again?')) { Store.reset(); App.render(); }
+    };
+  }
+
+  /* ------------------------------------------------------------------ sync UI */
+
+  function renderSync(mount) {
+    const cfg = Sync.config();
+    const st = Sync.status();
+
+    if (!cfg) {
+      mount.appendChild(h(`
+        <div>
+          <div class="sub" style="margin-bottom:10px">
+            Not syncing. Your data is only in this browser, on this computer.
+          </div>
+
+          <div class="banner" style="display:block;margin-bottom:12px">
+            <b>How this works.</b> Your data is saved as a file in a <b>private</b> GitHub
+            repository that belongs to you. Every computer you set this up on reads that
+            file, merges in its own changes, and saves it back — automatically. It is free,
+            nobody else can see it, and because it is stored in git you get a complete
+            history, so nothing is ever truly lost.
+          </div>
+
+          <details style="margin-bottom:12px">
+            <summary style="cursor:pointer;font-weight:600">Step-by-step setup (about 3 minutes)</summary>
+            <ol style="margin:10px 0 0 18px;line-height:1.7">
+              <li>Go to <b>github.com/new</b>. Name the repository <code>family-data</code>,
+                  choose <b>Private</b>, tick <b>Add a README</b>, and click Create.</li>
+              <li>Go to <b>github.com/settings/personal-access-tokens/new</b> (Fine-grained token).</li>
+              <li>Name it <code>family-dashboard</code>. Under <b>Repository access</b> choose
+                  <b>Only select repositories</b> and pick <code>family-data</code>.</li>
+              <li>Under <b>Permissions → Repository permissions</b>, set <b>Contents</b> to
+                  <b>Read and write</b>. Leave everything else alone.</li>
+              <li>Click <b>Generate token</b> and copy it. It looks like
+                  <code>github_pat_…</code>. You only get to see it once.</li>
+              <li>Paste it below, along with your GitHub username.</li>
+            </ol>
+            <div class="small muted" style="margin-top:8px">
+              On your other computer, do only the last step — same username, same repository,
+              and a token (you can reuse the same one).
+            </div>
+          </details>
+
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field"><label>GitHub username</label>
+              <input type="text" id="owner" placeholder="e.g. lindajinda"></div>
+            <div class="field"><label>Repository name</label>
+              <input type="text" id="repo" value="family-data"></div>
+          </div>
+          <div class="field"><label>Access token</label>
+            <input type="password" id="token" placeholder="github_pat_...">
+            <div class="small muted" style="margin-top:4px">
+              Stored only in this browser. Treat it like a password — it is never put into
+              the synced file itself.
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="connect">Connect and sync</button>
+          <div id="syncMsg" class="small" style="margin-top:8px"></div>
+        </div>
+      `));
+
+      mount.querySelector('#connect').onclick = async () => {
+        const owner = mount.querySelector('#owner').value.trim();
+        const repo = mount.querySelector('#repo').value.trim();
+        const token = mount.querySelector('#token').value.trim();
+        const msg = mount.querySelector('#syncMsg');
+
+        if (!owner || !repo || !token) {
+          msg.innerHTML = '<span style="color:var(--red)">Fill in all three boxes.</span>';
+          return;
+        }
+
+        msg.textContent = 'Connecting…';
+        Sync.connect(owner, repo, token);
+        await Sync.syncNow();
+
+        const s = Sync.status();
+        if (s.status === 'error') {
+          msg.innerHTML = `<span style="color:var(--red)">${esc(s.message)}</span>`;
+          Sync.disconnect();              // don't leave a broken config behind
+        } else {
+          App.render();
+        }
+      };
+      return;
+    }
+
+    // ---- connected ----
+    const when = st.lastSync
+      ? new Date(st.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'not yet';
+
+    const label = {
+      ok: `<span class="chip chip-good">✓ Synced</span>`,
+      syncing: `<span class="chip chip-info">Syncing…</span>`,
+      error: `<span class="chip chip-high">Problem</span>`,
+      off: `<span class="chip">Off</span>`
+    }[st.status] || '';
+
+    mount.appendChild(h(`
+      <div>
+        <div class="flex wrap" style="margin-bottom:8px">
+          ${label}
+          <span class="small muted">${esc(cfg.owner)}/${esc(cfg.repo)} · last sync ${esc(when)}</span>
+        </div>
+
+        ${st.status === 'error'
+          ? `<div class="banner" style="display:block;border-color:#F5C6C2;background:#FDF3F2">
+               <b>Sync problem.</b> ${esc(st.message)}
+             </div>`
+          : `<div class="sub" style="margin-bottom:10px">
+               Changes are saved to your private repository automatically — after you make a
+               change, when you come back to the tab, and every few minutes.
+             </div>`}
+
+        <div class="flex wrap">
+          <button class="btn btn-primary" id="now">Sync now</button>
+          <button class="btn btn-danger" id="off">Stop syncing on this computer</button>
+        </div>
+      </div>
+    `));
+
+    mount.querySelector('#now').onclick = async () => { await Sync.syncNow(); App.render(); };
+    mount.querySelector('#off').onclick = () => {
+      if (!confirm('Stop syncing on this computer?\n\nYour data stays in this browser and in the repository. Nothing is deleted.')) return;
+      Sync.disconnect();
+      App.render();
     };
   }
 

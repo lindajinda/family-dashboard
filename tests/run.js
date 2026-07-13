@@ -33,13 +33,13 @@ vm.createContext(sandbox);
 // plain <script> tags, and a trailing line hands the modules back to us.
 const read = f => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8');
 
-const bundle = ['seed.js', 'store.js', 'scheduler.js', 'habits.js', 'import.js']
+const bundle = ['seed.js', 'store.js', 'scheduler.js', 'habits.js', 'import.js', 'sync.js']
   .map(read).join('\n;\n')
-  + '\n;globalThis.__exports = { Store, Scheduler, Habits, Seed, Importer };';
+  + '\n;globalThis.__exports = { Store, Scheduler, Habits, Seed, Importer, Sync };';
 
 vm.runInContext(bundle, sandbox, { filename: 'app-bundle.js' });
 
-const { Store, Scheduler, Habits, Importer } = sandbox.__exports;
+const { Store, Scheduler, Habits, Importer, Sync } = sandbox.__exports;
 
 /* ---------------------------------------------------------------- test harness */
 let pass = 0, fail = 0;
@@ -833,6 +833,155 @@ test('holidays still block a Sunday-only subject', () => {
   Importer.apply(cur.id, lessons, MON, 'append');
 
   eq(Store.sequence(cur.id)[0].date, '2026-09-27', 'it skipped the blocked Sunday');
+});
+
+/* ===================================================================== SYNC */
+
+console.log('\nSync merge (two computers)');
+
+/** A minimal document. */
+function doc(over) {
+  return Object.assign({
+    schemaVersion: 1,
+    updatedAt: '2026-09-14T10:00:00.000Z',
+    settings: { mode: 'School Year', schoolYear: '2026-2027' },
+    children: [], subjects: [], curricula: [], lessons: [],
+    habits: [], habitLog: [], tasks: [], portfolio: [], holidays: []
+  }, over);
+}
+
+const rec = (id, at, over) => Object.assign({ id, updatedAt: at, deleted: false }, over);
+
+test('a record only one computer has is KEPT, never dropped', () => {
+  // Absence must never mean "delete". If it did, a computer that had not yet seen a
+  // new subject would delete it off the other machine on the next sync.
+  const mine   = doc({ subjects: [rec('a', '2026-09-14T10:00:00Z', { name: 'Latin' })] });
+  const theirs = doc({ subjects: [rec('b', '2026-09-14T10:00:00Z', { name: 'Maths' })] });
+
+  const m = Sync.merge(mine, theirs);
+  eq(m.subjects.map(s => s.name).sort(), ['Latin', 'Maths']);
+});
+
+test('the NEWER edit of the same record wins', () => {
+  const mine   = doc({ subjects: [rec('a', '2026-09-14T12:00:00Z', { name: 'Latin (renamed here)' })] });
+  const theirs = doc({ subjects: [rec('a', '2026-09-14T09:00:00Z', { name: 'Latin' })] });
+
+  eq(Sync.merge(mine, theirs).subjects[0].name, 'Latin (renamed here)');
+  eq(Sync.merge(theirs, mine).subjects[0].name, 'Latin (renamed here)', 'and the same either way round');
+});
+
+test('A DELETE IS NOT RESURRECTED by the computer that has not seen it', () => {
+  // The single most important sync test. Deletes are flags, not removals. If they
+  // were removals, the other computer would keep re-adding the row forever.
+  const deletedHere = doc({
+    subjects: [rec('a', '2026-09-14T12:00:00Z', { name: 'Latin', deleted: true })]
+  });
+  const staleThere = doc({
+    subjects: [rec('a', '2026-09-14T09:00:00Z', { name: 'Latin', deleted: false })]
+  });
+
+  const m = Sync.merge(deletedHere, staleThere);
+  eq(m.subjects.length, 1, 'the row is still there...');
+  ok(m.subjects[0].deleted, '...but it is still deleted, and stays deleted');
+});
+
+test('an UN-delete also propagates, because it is just a newer edit', () => {
+  const undeleted = doc({ subjects: [rec('a', '2026-09-14T15:00:00Z', { deleted: false })] });
+  const deleted   = doc({ subjects: [rec('a', '2026-09-14T12:00:00Z', { deleted: true })] });
+
+  ok(!Sync.merge(undeleted, deleted).subjects[0].deleted, 'the newer un-delete wins');
+});
+
+test('THE PORTFOLIO CAN ONLY EVER GROW', () => {
+  // The permanent record. A sync must never be able to lose a completed lesson,
+  // whatever else happens — so it is a pure union, never a last-write-wins.
+  const mine   = doc({ portfolio: [{ id: 'p1', title: 'Chapter 1' }, { id: 'p2', title: 'Chapter 2' }] });
+  const theirs = doc({ portfolio: [{ id: 'p2', title: 'Chapter 2' }, { id: 'p3', title: 'Chapter 3' }] });
+
+  const m = Sync.merge(mine, theirs);
+  eq(m.portfolio.length, 3, 'union, with no duplicates');
+  eq(m.portfolio.map(p => p.id).sort(), ['p1', 'p2', 'p3']);
+});
+
+test('an EMPTY remote (first ever sync) does not wipe the local data', () => {
+  const mine = doc({ subjects: [rec('a', '2026-09-14T10:00:00Z', { name: 'Latin' })] });
+  eq(Sync.merge(mine, null).subjects.length, 1, 'nothing on the server yet: keep everything');
+});
+
+test('an empty LOCAL (a brand new computer) picks up everything from the server', () => {
+  const theirs = doc({
+    subjects:  [rec('a', '2026-09-14T10:00:00Z', { name: 'Latin' })],
+    portfolio: [{ id: 'p1', title: 'Chapter 1' }]
+  });
+
+  const m = Sync.merge(doc(), theirs);
+  eq(m.subjects.length, 1);
+  eq(m.portfolio.length, 1, 'including the history');
+});
+
+test('two computers ticking DIFFERENT lessons both keep their work', () => {
+  // The everyday case: a parent on the desktop, a child on the laptop.
+  const desktop = doc({
+    lessons: [
+      rec('l1', '2026-09-14T12:00:00Z', { title: 'Latin 1', done: true }),
+      rec('l2', '2026-09-14T09:00:00Z', { title: 'Maths 1', done: false })
+    ]
+  });
+  const laptop = doc({
+    lessons: [
+      rec('l1', '2026-09-14T09:00:00Z', { title: 'Latin 1', done: false }),
+      rec('l2', '2026-09-14T13:00:00Z', { title: 'Maths 1', done: true })
+    ]
+  });
+
+  const m = Sync.merge(desktop, laptop);
+  ok(m.lessons.find(l => l.id === 'l1').done, 'the Latin tick survived');
+  ok(m.lessons.find(l => l.id === 'l2').done, 'and so did the Maths tick');
+});
+
+test('merging is idempotent — syncing twice changes nothing', () => {
+  const mine   = doc({ subjects: [rec('a', '2026-09-14T12:00:00Z', { name: 'Latin' })] });
+  const theirs = doc({ subjects: [rec('b', '2026-09-14T11:00:00Z', { name: 'Maths' })] });
+
+  const once  = Sync.merge(mine, theirs);
+  const twice = Sync.merge(once, theirs);
+
+  eq(twice.subjects.length, once.subjects.length);
+  eq(JSON.stringify(twice.subjects), JSON.stringify(once.subjects), 'stable');
+});
+
+test('both computers reach the SAME answer, whichever way round they merge', () => {
+  // If merge were not commutative the two machines would disagree forever, each
+  // overwriting the other on every sync.
+  const a = doc({
+    updatedAt: '2026-09-14T12:00:00Z',
+    subjects: [rec('s1', '2026-09-14T12:00:00Z', { name: 'From A' })],
+    lessons:  [rec('l1', '2026-09-14T08:00:00Z', { done: false })]
+  });
+  const b = doc({
+    updatedAt: '2026-09-14T11:00:00Z',
+    subjects: [rec('s2', '2026-09-14T11:00:00Z', { name: 'From B' })],
+    lessons:  [rec('l1', '2026-09-14T13:00:00Z', { done: true })]
+  });
+
+  const ab = Sync.merge(a, b);
+  const ba = Sync.merge(b, a);
+
+  const key = d => JSON.stringify({
+    subjects: d.subjects.map(x => x.id).sort(),
+    lesson:   d.lessons[0].done
+  });
+
+  eq(key(ab), key(ba), 'the two machines converge');
+  ok(ab.lessons[0].done, 'and the newer tick won on both');
+});
+
+test('the settings blob follows the most recently touched document', () => {
+  const older = doc({ updatedAt: '2026-09-14T09:00:00Z', settings: { mode: 'Summer' } });
+  const newer = doc({ updatedAt: '2026-09-14T18:00:00Z', settings: { mode: 'Vacation' } });
+
+  eq(Sync.merge(older, newer).settings.mode, 'Vacation');
+  eq(Sync.merge(newer, older).settings.mode, 'Vacation');
 });
 
 /* ==================================================================== report */
