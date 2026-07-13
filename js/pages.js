@@ -491,14 +491,17 @@ const Pages = (() => {
 
     const done = list.filter(x => Habits.isDone(x.id, date)).length;
 
+    // Compact by design. Habits are a strip you sweep through in seconds, not a
+    // section you study — so they get one tight row, and the streak sits inline
+    // rather than on a second line doubling the height of every button.
     const card = h(`
-      <div class="card" style="margin-top:22px">
-        <div class="flex" style="margin-bottom:14px">
-          <h2 style="margin:0">Daily habits</h2>
-          <span class="chip ${done === list.length ? 'chip-good' : ''}">${done} of ${list.length} done</span>
-          <button class="btn btn-sm right" data-go="habits">Streaks &amp; history &rarr;</button>
+      <div class="card" style="padding:12px 14px">
+        <div class="flex" style="margin-bottom:8px">
+          <h2 style="margin:0;font-size:15px">Daily habits</h2>
+          <span class="chip ${done === list.length ? 'chip-good' : ''}">${done}/${list.length}</span>
+          <button class="btn btn-sm right" data-go="habits" style="min-height:28px;padding:2px 10px">Streaks &rarr;</button>
         </div>
-        <div class="flex wrap" id="hb" style="gap:10px"></div>
+        <div class="flex wrap" id="hb" style="gap:6px"></div>
       </div>
     `).firstElementChild;
 
@@ -507,23 +510,23 @@ const Pages = (() => {
     list.forEach(hb => {
       const on = Habits.isDone(hb.id, date);
       const st = Habits.stats(hb, date);
-      const scheduled = Habits.isDue(hb, date);
 
       const btn = h(`
         <button class="btn" style="
-            min-height:58px; padding:10px 16px; gap:12px;
+            min-height:36px; padding:5px 12px; gap:8px; font-size:13px; border-radius:18px;
             border-color:${on ? esc(hb.color) : 'var(--border-2)'};
             background:${on ? esc(hb.color) : 'var(--surface)'};
             color:${on ? '#fff' : 'var(--text)'};">
-          <span class="check ${on ? 'on' : ''}" style="
-              width:24px;height:24px;flex:0 0 24px;font-size:14px;pointer-events:none;
-              ${on ? 'background:#fff;border-color:#fff;color:' + esc(hb.color) : ''}">&#10003;</span>
-          <span style="text-align:left">
-            <span style="display:block;font-weight:600">${esc(hb.icon || '')} ${esc(hb.name)}</span>
-            <span style="display:block;font-size:12px;opacity:.85">
-              ${st.current > 0 ? '&#128293; ' + st.current + ' day streak' : 'No streak yet'}${scheduled ? '' : ' &middot; extra'}
-            </span>
-          </span>
+          <span style="
+              width:16px;height:16px;flex:0 0 16px;border-radius:5px;display:grid;place-items:center;
+              font-size:11px;font-weight:700;pointer-events:none;
+              border:2px solid ${on ? '#fff' : 'var(--border-2)'};
+              background:${on ? '#fff' : 'transparent'};
+              color:${on ? esc(hb.color) : 'transparent'};">&#10003;</span>
+          <span>${esc(hb.icon || '')} ${esc(hb.name)}</span>
+          ${st.current > 0
+            ? `<span style="font-size:11px;opacity:.85;font-weight:600">&#128293;${st.current}</span>`
+            : ''}
         </button>
       `).firstElementChild;
 
@@ -614,7 +617,7 @@ const Pages = (() => {
     const mask = hb ? hb.days : 0b0111110;
     Modal.open(hb ? 'Edit habit' : 'New habit', `
       <div class="field"><label>Name</label><input type="text" id="n" value="${esc(hb ? hb.name : '')}" placeholder="e.g. Morning skin care"></div>
-      <div class="field"><label>Icon</label><input type="text" id="i" value="${esc(hb ? hb.icon : '✅')}" maxlength="2"></div>
+      ${iconPickerHtml(hb ? hb.icon : '✅')}
       <div class="field"><label>Colour</label><input type="color" id="c" value="${esc(hb ? hb.color : '#0F6CBD')}" style="height:44px"></div>
       <div class="field">
         <label>Days</label>
@@ -637,6 +640,8 @@ const Pages = (() => {
       else Store.add('habits', Object.assign({ childId, order: Store.habits().length, archived: false }, rec));
       App.render();
     }, () => {
+      bindIconPicker();
+
       const d = document.querySelector('#del');
       if (d) d.onclick = () => {
         Store.update('habits', hb.id, { archived: true });
@@ -676,11 +681,12 @@ const Pages = (() => {
 
       const tr = h(`
         <tr style="${s.archived ? 'opacity:.5' : ''}">
-          <td style="width:60px">
-            <button class="btn btn-sm btn-icon" data-up ${idx === 0 ? 'disabled' : ''}>↑</button>
+          <td style="width:86px;white-space:nowrap">
+            <button class="btn btn-sm btn-icon" data-up   ${idx === 0 ? 'disabled' : ''} title="Move up">&uarr;</button>
+            <button class="btn btn-sm btn-icon" data-down ${idx === subs.length - 1 ? 'disabled' : ''} title="Move down">&darr;</button>
           </td>
           <td>
-            <span style="font-size:18px">${esc(s.icon || '')}</span>
+            <span style="font-size:20px">${esc(s.icon || '')}</span>
             <b style="color:${esc(s.color)};margin-left:6px">${esc(s.name)}</b>
             ${s.archived ? '<span class="chip chip-warn" style="margin-left:8px">Archived</span>' : ''}
           </td>
@@ -691,22 +697,98 @@ const Pages = (() => {
       `).firstElementChild;
 
       tr.querySelector('[data-edit]').onclick = () => editSubject(s);
-      const up = tr.querySelector('[data-up]');
-      if (up) up.onclick = () => {
-        const prev = subs[idx - 1];
-        Store.update('subjects', s.id, { order: prev.order });
-        Store.update('subjects', prev.id, { order: s.order });
-        App.render();
-      };
+      tr.querySelector('[data-up]').onclick = () => reorder(subs, idx, -1);
+      tr.querySelector('[data-down]').onclick = () => reorder(subs, idx, +1);
+
       tb.appendChild(tr);
     });
+  }
+
+  /**
+   * Move one subject up or down.
+   *
+   * Renumbers the WHOLE list 0..n-1 rather than swapping two order values. Swapping
+   * looks fine until two subjects end up sharing an order number (which they do, the
+   * moment one is added while another is archived) — then the arrows start doing
+   * nothing, or worse, silently reordering something else.
+   */
+  function reorder(list, idx, delta) {
+    const next = idx + delta;
+    if (next < 0 || next >= list.length) return;
+
+    const arr = list.slice();
+    const [moved] = arr.splice(idx, 1);
+    arr.splice(next, 0, moved);
+
+    arr.forEach((s, i) => Store.update('subjects', s.id, { order: i }));
+    App.render();
+  }
+
+  /* A palette rather than a text box. Typing an emoji on a desktop keyboard is a
+     genuine nuisance, and the free-text field is still there for anything not listed. */
+  const ICONS = [
+    '📘','📗','📕','📙','📐','📏','🧮','➗','∑','🔢',
+    '🧬','🔬','⚗️','🧪','🦠','🌱','🌍','🔭','⚛️','🧲',
+    '💻','⌨️','🖥️','⚡','🤖','🔌','🧠','🎯','🏆','🥇',
+    '✍️','📝','📖','📚','🗞️','🎭','🎨','🖌️','🎵','🎹',
+    '🏛️','🗺️','⏳','🕰️','⚔️','👑','🗽','🧭','📜','🏺',
+    '✝️','🕊️','🙏','⛪','📿','🕯️','🌟','💡','🔍','🧩',
+    '🇪🇸','🇨🇳','🇫🇷','🇩🇪','🇮🇹','🗣️','💬','🔤','🈁','🌐',
+    '⚽','🏃','🏋️','🧘','🥋','🎽','🍎','🧴','🤝','⏰'
+  ];
+
+  function iconPickerHtml(current) {
+    return `
+      <div class="field">
+        <label>Icon</label>
+        <div id="iconGrid" style="
+            display:grid; grid-template-columns:repeat(10, 1fr); gap:4px;
+            max-height:180px; overflow-y:auto; padding:8px;
+            border:1px solid var(--border-2); border-radius:8px; background:var(--surface-2)">
+          ${ICONS.map(ic => `
+            <button type="button" class="icon-opt" data-ic="${ic}" style="
+              font-size:20px; line-height:1; padding:6px 0; cursor:pointer;
+              border-radius:6px; border:2px solid ${ic === current ? 'var(--accent)' : 'transparent'};
+              background:${ic === current ? 'var(--accent-soft)' : 'transparent'};">${ic}</button>`).join('')}
+        </div>
+        <div class="flex" style="margin-top:8px">
+          <span class="small muted">Selected:</span>
+          <span id="iconPreview" style="font-size:22px">${esc(current || '📘')}</span>
+          <input type="text" id="i" value="${esc(current || '📘')}" maxlength="4"
+                 style="max-width:90px;text-align:center" title="Or type/paste any character">
+        </div>
+      </div>`;
+  }
+
+  /** Wires the grid to the hidden text field. Call inside a Modal's afterRender. */
+  function bindIconPicker() {
+    const grid = document.querySelector('#iconGrid');
+    const input = document.querySelector('#i');
+    const preview = document.querySelector('#iconPreview');
+    if (!grid || !input) return;
+
+    grid.onclick = e => {
+      const b = e.target.closest('.icon-opt');
+      if (!b) return;
+
+      input.value = b.dataset.ic;
+      preview.textContent = b.dataset.ic;
+
+      grid.querySelectorAll('.icon-opt').forEach(x => {
+        const on = x === b;
+        x.style.borderColor = on ? 'var(--accent)' : 'transparent';
+        x.style.background = on ? 'var(--accent-soft)' : 'transparent';
+      });
+    };
+
+    input.oninput = () => { preview.textContent = input.value; };
   }
 
   function editSubject(s) {
     const children = Store.children();
     Modal.open(s ? 'Edit subject' : 'New subject', `
       <div class="field"><label>Name</label><input type="text" id="n" value="${esc(s ? s.name : '')}" placeholder="e.g. Organic Chemistry"></div>
-      <div class="field"><label>Icon</label><input type="text" id="i" value="${esc(s ? s.icon : '📘')}" maxlength="2"></div>
+      ${iconPickerHtml(s ? s.icon : '📘')}
       <div class="field"><label>Colour</label><input type="color" id="c" value="${esc(s ? s.color : '#0F6CBD')}" style="height:44px"></div>
       <div class="field">
         <label>Assign to</label>
@@ -745,6 +827,8 @@ const Pages = (() => {
 
       App.render();
     }, () => {
+      bindIconPicker();
+
       const a = document.querySelector('#arch');
       if (a) a.onclick = () => {
         Store.update('subjects', s.id, { archived: !s.archived });
