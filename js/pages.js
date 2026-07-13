@@ -1243,21 +1243,47 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
 
   /* ============================================================== PORTFOLIO */
 
+  // Filter state lives outside the render so it survives a redraw.
+  let pf = { child: '', subject: '', category: '', from: '', to: '' };
+  let pfLimit = 200;
+
   function portfolio(root) {
     const all = Store.portfolio();
     const children = Store.children();
+
+    /* The subject and category lists are built FROM THE PORTFOLIO, not from the
+       current subjects. A subject dropped two years ago still has history, and it
+       must still be findable — that is the entire point of the portfolio. */
+    const subjectNames = [...new Set(all.map(e => e.subjectName).filter(Boolean))].sort();
+    const categories = [...new Set(all.map(e => e.category || e.kind).filter(Boolean))].sort();
+
+    const rows = all.filter(e =>
+      (!pf.child    || e.childId === pf.child) &&
+      (!pf.subject  || e.subjectName === pf.subject) &&
+      (!pf.category || (e.category || e.kind) === pf.category) &&
+      (!pf.from     || (e.date || '') >= pf.from) &&
+      (!pf.to       || (e.date || '') <= pf.to)
+    );
+
+    const filtered = rows.length !== all.length;
 
     root.appendChild(h(`
       <div class="page-head">
         <div>
           <h1>Educational Portfolio</h1>
-          <div class="sub">Permanent record of everything completed. Nothing here is ever deleted.</div>
+          <div class="sub">
+            Permanent record of everything completed. Nothing here is ever deleted &mdash;
+            not by archiving a subject, not by deleting one.
+          </div>
         </div>
-        <button class="btn" id="csv">Export CSV</button>
+        <button class="btn btn-primary" id="csv">
+          &#11015; Export ${filtered ? 'these' : 'all'} ${rows.length.toLocaleString()} rows to CSV
+        </button>
       </div>
     `));
 
-    root.querySelector('#csv').onclick = () => Reports.exportCsv(all);
+    // The export follows the filters, so "Amaru's Chemistry, autumn 2026" is one click.
+    root.querySelector('#csv').onclick = () => Reports.exportCsv(rows);
 
     if (!all.length) {
       root.appendChild(h(`<div class="card empty"><div class="big">📚</div>
@@ -1265,41 +1291,125 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       return;
     }
 
-    const grid = h(`<div class="grid grid-3" style="margin-bottom:18px"></div>`).firstElementChild;
-    children.forEach(c => {
-      const mine = all.filter(e => e.childId === c.id);
-      const lessons = mine.filter(e => e.kind === 'lesson');
-      const hours = Math.round(mine.reduce((n, e) => n + (e.minutes || 0), 0) / 60 * 10) / 10;
+    // ---- filters ----
+    const bar = h(`
+      <div class="card" style="margin-bottom:8px">
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;align-items:end">
+          <div class="field" style="margin:0"><label>Child</label>
+            <select id="fc"><option value="">All children</option>
+              ${children.map(c => `<option value="${esc(c.id)}" ${pf.child === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+            </select></div>
+
+          <div class="field" style="margin:0"><label>Subject</label>
+            <select id="fs"><option value="">All subjects</option>
+              ${subjectNames.map(n => `<option value="${esc(n)}" ${pf.subject === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+            </select></div>
+
+          <div class="field" style="margin:0"><label>Type</label>
+            <select id="fk"><option value="">Everything</option>
+              ${categories.map(n => `<option value="${esc(n)}" ${pf.category === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+            </select></div>
+
+          <div class="field" style="margin:0"><label>From</label>
+            <input type="date" id="ff" value="${esc(pf.from)}"></div>
+
+          <div class="field" style="margin:0"><label>To</label>
+            <input type="date" id="ft" value="${esc(pf.to)}"></div>
+
+          <div class="field" style="margin:0">
+            <button class="btn" id="clear" ${filtered ? '' : 'disabled'} style="width:100%">Clear</button>
+          </div>
+        </div>
+      </div>
+    `).firstElementChild;
+
+    root.appendChild(bar);
+
+    const setF = (k, v) => { pf[k] = v; pfLimit = 200; App.render(); };
+    bar.querySelector('#fc').onchange = e => setF('child', e.target.value);
+    bar.querySelector('#fs').onchange = e => setF('subject', e.target.value);
+    bar.querySelector('#fk').onchange = e => setF('category', e.target.value);
+    bar.querySelector('#ff').onchange = e => setF('from', e.target.value);
+    bar.querySelector('#ft').onchange = e => setF('to', e.target.value);
+    bar.querySelector('#clear').onclick = () => {
+      pf = { child: '', subject: '', category: '', from: '', to: '' };
+      pfLimit = 200;
+      App.render();
+    };
+
+    // ---- totals, which follow the filters ----
+    const shownChildren = pf.child ? children.filter(c => c.id === pf.child) : children;
+
+    const grid = h(`<div class="grid grid-3" style="margin-bottom:8px"></div>`).firstElementChild;
+    shownChildren.forEach(c => {
+      const mine = rows.filter(e => e.childId === c.id);
+      const work = mine.filter(e => e.kind === 'lesson' || e.kind === 'part').length;
+      const habits = mine.filter(e => e.kind === 'habit').length;
+      const days = new Set(mine.map(e => e.date)).size;
 
       grid.appendChild(h(`
         <div class="card">
-          <div class="flex" style="margin-bottom:10px">
-            <span style="width:12px;height:12px;border-radius:50%;background:${esc(c.color)}"></span>
+          <div class="flex" style="margin-bottom:8px">
+            <span style="width:10px;height:10px;border-radius:50%;background:${esc(c.color)}"></span>
             <h2 style="margin:0;color:${esc(c.color)}">${esc(c.name)}</h2>
           </div>
-          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
-            <div class="stat"><div class="n">${lessons.length}</div><div class="l">Lessons completed</div></div>
-            <div class="stat"><div class="n">${hours}</div><div class="l">Hours studied</div></div>
+          <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div class="stat"><div class="n">${work}</div><div class="l">Assignments</div></div>
+            <div class="stat"><div class="n">${habits}</div><div class="l">Habits</div></div>
+            <div class="stat"><div class="n">${days}</div><div class="l">Days active</div></div>
           </div>
         </div>`));
     });
     root.appendChild(grid);
 
-    const table = h(`<div class="card"><h2>Complete history</h2><table>
-      <thead><tr><th>Date</th><th>Child</th><th>Category</th><th>Subject</th><th>Item</th><th>Min</th></tr></thead>
-      <tbody></tbody></table></div>`).firstElementChild;
+    // ---- the history ----
+    if (!rows.length) {
+      root.appendChild(h(`<div class="card empty"><div class="big">🔍</div>
+        <div>Nothing matches those filters.</div></div>`));
+      return;
+    }
+
+    const ordered = [...rows].reverse();          // newest first
+    const page = ordered.slice(0, pfLimit);
+
+    const table = h(`<div class="card">
+      <div class="flex" style="margin-bottom:6px">
+        <h2 style="margin:0">History</h2>
+        <span class="chip">${page.length.toLocaleString()} of ${rows.length.toLocaleString()}</span>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Child</th><th>Type</th><th>Subject</th><th>Item</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>`).firstElementChild;
 
     const tb = table.querySelector('tbody');
-    [...all].reverse().slice(0, 300).forEach(e => {
+    page.forEach(e => {
       tb.appendChild(h(`<tr>
-        <td>${esc(e.date || '')}</td>
+        <td style="white-space:nowrap">${esc(e.date || '')}</td>
         <td>${esc(e.childName || '')}</td>
         <td><span class="chip">${esc(e.category || e.kind)}</span></td>
         <td>${esc(e.subjectName || '—')}</td>
-        <td>${esc(e.title || '')}</td>
-        <td>${e.minutes || 0}</td>
+        <td>${esc(e.title || '')}${e.lessonTitle && e.lessonTitle !== e.title
+              ? `<span class="small muted"> · ${esc(e.lessonTitle)}</span>` : ''}</td>
       </tr>`));
     });
+
+    // Only ever a display cap, never a cap on the data. The CSV always has everything
+    // that matches the filters, however many rows that is.
+    if (rows.length > page.length) {
+      const more = h(`<div style="text-align:center;margin-top:8px">
+        <button class="btn" id="more">Show ${Math.min(500, rows.length - page.length).toLocaleString()} more</button>
+        <div class="small muted" style="margin-top:4px">
+          This is only a display limit &mdash; the CSV export always contains all
+          ${rows.length.toLocaleString()} matching rows.
+        </div>
+      </div>`).firstElementChild;
+
+      more.querySelector('#more').onclick = () => { pfLimit += 500; App.render(); };
+      table.appendChild(more);
+    }
+
     root.appendChild(table);
   }
 

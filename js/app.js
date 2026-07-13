@@ -45,17 +45,34 @@ const Modal = (() => {
 const Reports = (() => {
   'use strict';
 
-  function exportCsv(rows) {
-    const cols = ['date', 'childName', 'category', 'subjectName', 'title', 'minutes', 'schoolYear', 'mode'];
-    const head = cols.join(',');
-    const body = rows.map(r =>
-      cols.map(c => {
-        const v = r[c] ?? '';
-        return /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v;
-      }).join(',')
-    ).join('\n');
+  const COLS = [
+    ['date',        'Date'],
+    ['childName',   'Child'],
+    ['category',    'Type'],
+    ['subjectName', 'Subject'],
+    ['lessonTitle', 'Day'],
+    ['title',       'Assignment'],
+    ['assignedDate','Planned for'],
+    ['schoolYear',  'School year'],
+    ['mode',        'Mode']
+  ];
 
-    const blob = new Blob([head + '\n' + body], { type: 'text/csv;charset=utf-8' });
+  const cell = v => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  function exportCsv(rows) {
+    const head = COLS.map(c => c[1]).join(',');
+    const body = [...rows]
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))   // oldest first reads better
+      .map(r => COLS.map(c => cell(r[c[0]])).join(','))
+      .join('\n');
+
+    // The BOM matters: without it Excel opens UTF-8 CSVs as Latin-1 and mangles every
+    // accented name and emoji in the file.
+    const blob = new Blob(['﻿' + head + '\n' + body], { type: 'text/csv;charset=utf-8' });
+
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `portfolio-${Store.today()}.csv`;
