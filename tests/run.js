@@ -438,6 +438,41 @@ test('working ahead: a day finished early is re-dated to when it was ACTUALLY do
   eq(l.plannedDate, WED, 'and remembers when it had been planned for');
 });
 
+test('un-ticking a mis-tapped future assignment puts the lesson back on its planned day', () => {
+  // The accident this guards: tapping a future assignment re-dates that lesson to
+  // today. If un-ticking left it there, one stray tap would permanently drag future
+  // work onto today, and no amount of un-ticking would put it back.
+  const { cur } = build([MON, TUE, WED]);
+  const future = Store.sequence(cur.id)[2];        // planned for Wednesday
+  const parts = Store.partsOf(future);
+
+  parts.forEach(p => Store.togglePart(future.id, p.id, MON));   // finished early
+  eq(Store.lesson(future.id).date, MON, 'moved to the day it was done');
+
+  Store.togglePart(future.id, parts[0].id, MON);                // oops, un-tick one
+
+  const l = Store.lesson(future.id);
+  ok(!Store.isLessonDone(l), 'the day is open again');
+  eq(l.date, WED, 'and it went back to Wednesday, where it was planned');
+  ok(!l.plannedDate, 'the remembered date was cleared');
+});
+
+test('a partly-done future lesson keeps its ticked parts visible so they can be undone', () => {
+  const { cur } = build([MON, TUE, WED]);
+  const future = Store.sequence(cur.id)[2];
+  const parts = Store.partsOf(future);
+
+  Store.togglePart(future.id, parts[0].id, MON);   // tick just one of two
+
+  const after = Store.partsOf(Store.lesson(future.id));
+  eq(after.length, 2, 'BOTH parts are still on the lesson');
+  ok(after[0].done, 'the ticked one is still there, marked done');
+  ok(!after[1].done);
+
+  Store.togglePart(future.id, parts[0].id, MON);   // undo it
+  ok(!Store.partsOf(Store.lesson(future.id))[0].done, 'un-ticked cleanly');
+});
+
 test('working ahead PULLS THE REST OF THE SUBJECT UP', () => {
   // Finish Monday and Tuesday's work on Monday. Wednesday's work should move up to
   // Tuesday -- the student is a day ahead, and the schedule should say so.

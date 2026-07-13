@@ -165,8 +165,18 @@ const Store = (() => {
       // nothing can be pulled up into it, and the schedule cannot compact. Re-dating
       // it frees the slot and makes the calendar tell the truth about what happened.
       if (lesson.done && !wasDone && lesson.date && onDate < lesson.date && !lesson.pinned) {
-        lesson.plannedDate = lesson.plannedDate || lesson.date;   // keep the original
+        lesson.plannedDate = lesson.plannedDate || lesson.date;   // remember the original
         lesson.date = onDate;
+      }
+
+      // ...and un-ticking it puts it back where it was planned.
+      //
+      // Without this, an accidental tap on a future assignment would permanently drag
+      // that lesson onto today: ticking re-dates it to today, and un-ticking would
+      // leave it there. Undo has to actually undo.
+      if (wasDone && !lesson.done && lesson.plannedDate) {
+        lesson.date = lesson.plannedDate;
+        delete lesson.plannedDate;
       }
 
       if (part.done) {

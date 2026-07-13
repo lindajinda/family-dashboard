@@ -438,42 +438,53 @@ const Pages = (() => {
 
     upcoming.forEach(({ lesson, date: d2 }) => {
       const s = lesson.subject;
-      const parts = Store.remainingParts(lesson);
+      const parts = Store.partsOf(lesson);
+      const doneCount = parts.filter(p => p.done).length;
 
       const block = h(`
-        <div style="padding:10px 0;border-top:1px solid var(--border)">
-          <div class="flex wrap" style="margin-bottom:6px">
+        <div style="padding:8px 0;border-top:1px solid var(--border)">
+          <div class="flex wrap" style="margin-bottom:5px;gap:8px">
             <span style="width:10px;height:10px;border-radius:3px;background:${esc(s.color)}"></span>
-            <b style="color:${esc(s.color)}">${esc(s.name)}</b>
+            <b style="color:${esc(s.color)};font-size:13px">${esc(s.name)}</b>
             <span class="muted small">${esc(lesson.title)}</span>
-            <span class="chip right">${esc(fmtShort(d2))}</span>
+            ${doneCount ? `<span class="chip chip-warn" style="padding:1px 7px;font-size:11px">${doneCount}/${parts.length}</span>` : ''}
+            <span class="chip right" style="padding:1px 7px;font-size:11px">${esc(fmtShort(d2))}</span>
           </div>
-          <div class="parts" style="display:flex;flex-direction:column;gap:6px"></div>
+          <div class="parts" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
       `).firstElementChild;
 
       const wrap = block.querySelector('.parts');
+
+      // EVERY part, not just the unfinished ones. Rendering only what is left to do
+      // means a part vanishes the instant it is ticked — so an accidental tap can
+      // never be undone. Ticked ones stay put, struck through, and tap again to undo.
       parts.forEach(p => {
         const line = h(`
-          <label class="flex" style="gap:10px;cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--border)">
-            <span class="check" style="width:22px;height:22px;flex:0 0 22px;font-size:13px">&#10003;</span>
-            <span class="small">${esc(p.text)}</span>
+          <label class="flex" style="
+              gap:9px; cursor:pointer; padding:5px 9px; border-radius:6px;
+              border:1px solid var(--border);
+              background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
+            <span class="check ${p.done ? 'on' : ''}"
+                  style="width:20px;height:20px;flex:0 0 20px;font-size:12px;border-radius:5px">&#10003;</span>
+            <span class="small" style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
           </label>`).firstElementChild;
 
         line.onclick = e => {
           e.preventDefault();
-          // Completed on the day it was ACTUALLY done, not the day it was planned for.
-          // The portfolio should say when the child did the work.
-          Store.togglePart(lesson.id, p.id, Store.today());
+          // Recorded against the day it was ACTUALLY done, not the day it was planned
+          // for. The portfolio should say when the child really did the work.
+          const nowDone = Store.togglePart(lesson.id, p.id, Store.today());
 
-          // Working ahead closes the gap: the rest of this subject moves up.
           const moves = Scheduler.afterCompletion(lesson.curriculumId, Store.today());
           App.render();
 
-          if (moves.length) {
+          if (nowDone && moves.length) {
             setTimeout(() => banner(
               `Nice — you're ahead in ${s.name}. ${moves.length} lesson${moves.length === 1 ? '' : 's'} ` +
               `moved earlier. Other subjects unchanged.`), 0);
+          } else if (!nowDone) {
+            setTimeout(() => banner(`Un-ticked "${p.text}". It is back on the schedule.`), 0);
           }
         };
         wrap.appendChild(line);
