@@ -683,6 +683,71 @@ test('extending a plan keeps completed days; replacing keeps them too', () => {
   ok(!p.some(e => e.title === 'Day 3: Push'), 'the unfinished days were replaced');
 });
 
+test('ONE TAP completes a planned habit\'s whole day', () => {
+  // The bug: the big checkbox was disabled for planned habits, so the most obvious
+  // place to tick a habit off was simply dead. One tap must always finish the day.
+  const hb = plannedHabit();
+  const e = Habits.currentEntry(hb);
+
+  Habits.completeEntry(hb.id, e.id, MON, true);
+
+  ok(Habits.isDone(hb.id, MON), 'the habit is done for the day');
+  ok(Habits.plan(Store.habit(hb.id))[0].parts.every(p => p.done), 'every assignment ticked');
+  eq(Habits.currentEntry(Store.habit(hb.id)).title, 'Day 2: Build', 'the plan advanced');
+});
+
+test('one tap can also UN-complete the day', () => {
+  const hb = plannedHabit();
+  const e = Habits.currentEntry(hb);
+
+  Habits.completeEntry(hb.id, e.id, MON, true);
+  Habits.completeEntry(hb.id, e.id, MON, false);
+
+  ok(!Habits.isDone(hb.id, MON), 'no longer done');
+  ok(Habits.plan(Store.habit(hb.id))[0].parts.every(p => !p.done), 'assignments cleared');
+  eq(Habits.currentEntry(Store.habit(hb.id)).title, 'Day 1: Foundation', 'back to day 1');
+});
+
+test('a single day can be deleted from the plan', () => {
+  const hb = plannedHabit();
+  const day2 = Habits.plan(hb)[1];
+
+  Habits.removePlanEntry(hb.id, day2.id);
+
+  const p = Habits.plan(Store.habit(hb.id));
+  eq(p.length, 2);
+  ok(!p.some(e => e.title === 'Day 2: Build'), 'day 2 is gone');
+  ok(p.some(e => e.title === 'Day 3: Push'), 'day 3 survived');
+});
+
+test('a COMPLETED day cannot be deleted — that is real history', () => {
+  const hb = plannedHabit();
+  const e1 = Habits.currentEntry(hb);
+  Habits.completeEntry(hb.id, e1.id, MON, true);
+
+  const removed = Habits.removePlanEntry(hb.id, e1.id);
+
+  eq(removed, false, 'refused');
+  ok(Habits.plan(Store.habit(hb.id)).some(e => e.id === e1.id), 'still there');
+});
+
+test('the whole plan can be removed, turning it back into a simple habit', () => {
+  // The other bug: once a plan was entered there was no way to undo it.
+  const hb = plannedHabit();
+  const e1 = Habits.currentEntry(hb);
+  Habits.completeEntry(hb.id, e1.id, MON, true);
+
+  Habits.clearPlan(hb.id);
+
+  const fresh = Store.habit(hb.id);
+  ok(!Habits.hasPlan(fresh), 'no plan any more');
+  ok(Habits.isDone(hb.id, MON), 'but the day it was done still counts');
+  eq(Habits.stats(fresh, MON).current, 1, 'and the streak survives');
+
+  Habits.toggle(hb.id, TUE);                         // simple tapping works again
+  ok(Habits.isDone(hb.id, TUE));
+});
+
 test('a habit with no plan still works as a simple one-tap habit', () => {
   const hb = habitFixture(EVERY);
   ok(!Habits.hasPlan(hb), 'no plan');

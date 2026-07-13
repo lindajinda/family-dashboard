@@ -194,7 +194,7 @@ const Pages = (() => {
     renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
 
     const rows = root.querySelector('#rows');
-    rows.appendChild(h(`<h2 style="margin:14px 0 8px;font-size:15px">Schoolwork</h2>`));
+    rows.appendChild(h(`<h2 style="margin:10px 0 6px;font-size:13px">Schoolwork</h2>`));
 
     if (!lessons.length) {
       rows.appendChild(h(`
@@ -513,9 +513,9 @@ const Pages = (() => {
     // section you study — so they get one tight row, and the streak sits inline
     // rather than on a second line doubling the height of every button.
     const card = h(`
-      <div class="card" style="padding:12px 14px">
-        <div class="flex" style="margin-bottom:8px">
-          <h2 style="margin:0;font-size:15px">Daily habits</h2>
+      <div class="card" style="padding:8px 10px">
+        <div class="flex" style="margin-bottom:6px">
+          <h2 style="margin:0;font-size:13px">Daily habits</h2>
           <span class="chip ${done === list.length ? 'chip-good' : ''}">${done}/${list.length}</span>
           <button class="btn btn-sm right" data-go="habits" style="min-height:28px;padding:2px 10px">Streaks &rarr;</button>
         </div>
@@ -578,10 +578,10 @@ const Pages = (() => {
       const allDone = doneCount === parts.length && parts.length > 0;
 
       const block = h(`
-        <div style="margin-top:8px;padding:8px 10px;border-radius:8px;
+        <div style="margin-top:5px;padding:6px 8px;border-radius:7px;
              border:1px solid ${allDone ? esc(hb.color) : 'var(--border)'};
              background:var(--surface);">
-          <div class="flex wrap" style="gap:8px;margin-bottom:6px">
+          <div class="flex wrap" style="gap:6px;margin-bottom:4px">
             <span style="font-weight:600;font-size:13px;color:${esc(hb.color)}">${esc(hb.icon || '')} ${esc(hb.name)}</span>
             <span class="muted small">${esc(entry.title)}</span>
             <span class="chip ${allDone ? 'chip-good' : (doneCount ? 'chip-warn' : '')}"
@@ -589,7 +589,7 @@ const Pages = (() => {
             <span class="chip" style="padding:1px 7px;font-size:11px">Day ${prog.current > prog.total ? prog.total : prog.current} of ${prog.total}</span>
             ${st.current > 0 ? `<span class="chip" style="padding:1px 7px;font-size:11px">&#128293;${st.current}</span>` : ''}
           </div>
-          <div class="pl" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+          <div class="pl" style="display:flex;flex-wrap:wrap;gap:3px"></div>
         </div>
       `).firstElementChild;
 
@@ -598,7 +598,7 @@ const Pages = (() => {
       parts.forEach(p => {
         const line = h(`
           <label class="flex" style="
-              gap:7px;cursor:pointer;padding:4px 9px;border-radius:14px;font-size:12px;
+              gap:6px;cursor:pointer;padding:2px 8px;border-radius:12px;font-size:12px;
               border:1px solid var(--border);
               background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
             <span class="check ${p.done ? 'on' : ''}"
@@ -670,9 +670,10 @@ const Pages = (() => {
       const entry = planned ? Habits.entryFor(hb, date) : null;
 
       const row = h(`
-        <div class="row">
+        <div class="row" style="align-items:stretch">
           <div class="stripe" style="background:${esc(hb.color)}"></div>
-          <button class="check ${on ? 'on' : ''}" ${planned ? 'disabled title="Tick the individual assignments on the Today page"' : ''}>✓</button>
+          <button class="check ${on ? 'on' : ''}" style="align-self:center"
+                  title="${planned ? 'Tick the whole day at once' : 'Mark done'}">✓</button>
           <div class="row-main">
             <div class="row-meta">
               <span class="row-subject">${esc(hb.icon || '')} ${esc(hb.name)}</span>
@@ -680,33 +681,62 @@ const Pages = (() => {
               <span class="chip">Best ${st.longest}</span>
               <span class="chip">${st.rate}%</span>
               ${planned
-                ? `<span class="chip chip-info">📋 Plan · day ${Math.min(prog.current, prog.total)} of ${prog.total}</span>`
+                ? `<span class="chip chip-info">📋 Day ${Math.min(prog.current, prog.total)} of ${prog.total}</span>`
                 : ''}
               ${due ? '' : '<span class="chip chip-warn">Not scheduled today</span>'}
             </div>
 
-            ${planned && entry
-              ? `<div class="small muted" style="margin-top:4px">
-                   Next: <b>${esc(entry.title)}</b> — ${(entry.parts || []).map(p => esc(p.text)).join(' · ')}
-                 </div>`
-              : ''}
+            ${planned && entry ? `<div style="margin-top:6px">
+                <div class="small" style="font-weight:600;margin-bottom:4px">${esc(entry.title)}</div>
+                <div class="pl" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+              </div>` : ''}
+
             ${planned && !entry
               ? '<div class="small muted" style="margin-top:4px">Plan complete. Add more days to keep the progression going.</div>'
               : ''}
 
-            <div class="dots" style="margin-top:6px">
+            <div class="dots" style="margin-top:8px">
               ${hist.map(d => `<i class="${d.done ? 'done' : (d.due ? 'miss' : '')}" title="${d.date}"></i>`).join('')}
             </div>
           </div>
-          <div class="row-actions">
+          <div class="row-actions" style="align-items:flex-start">
             <button class="btn btn-sm" data-act="plan">${planned ? '📋 Daily plan' : '📋 Add daily plan'}</button>
             <button class="btn btn-sm" data-act="edit">Edit</button>
           </div>
         </div>
       `).firstElementChild;
 
-      const chk = row.querySelector('.check');
-      if (!planned) chk.onclick = () => { Habits.toggle(hb.id, date); App.render(); };
+      // The big checkbox always works. For a planned habit it ticks (or un-ticks) the
+      // whole of today's entry at once — one tap finishes the day, which is what a
+      // checkbox is for. The individual assignments are right underneath for anyone
+      // who wants to tick them off one at a time.
+      row.querySelector('.check').onclick = () => {
+        if (planned && entry) Habits.completeEntry(hb.id, entry.id, date, !on);
+        else if (!planned) Habits.toggle(hb.id, date);
+        App.render();
+      };
+
+      if (planned && entry) {
+        const pw = row.querySelector('.pl');
+        (entry.parts || []).forEach(p => {
+          const line = h(`
+            <label class="flex" style="
+                gap:7px;cursor:pointer;padding:4px 9px;border-radius:14px;font-size:12px;
+                border:1px solid var(--border);
+                background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
+              <span class="check ${p.done ? 'on' : ''}"
+                    style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:5px">&#10003;</span>
+              <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
+            </label>`).firstElementChild;
+
+          line.onclick = e => {
+            e.preventDefault();
+            Habits.togglePlanPart(hb.id, entry.id, p.id, date);
+            App.render();
+          };
+          pw.appendChild(line);
+        });
+      }
 
       row.querySelector('[data-act="edit"]').onclick = () => editHabit(hb, habitChild);
       row.querySelector('[data-act="plan"]').onclick = () => planDialog(hb);
@@ -730,23 +760,45 @@ const Pages = (() => {
     const existing = Habits.plan(hb);
     const done = existing.filter(e => e.done).length;
 
+    // The existing days, listed and editable. Not being able to see, change or remove
+    // a plan once it was entered was the single most annoying thing about the first
+    // version of this dialog.
+    const listHtml = existing.length ? `
+      <div class="field">
+        <label>The plan so far (${existing.length} day${existing.length === 1 ? '' : 's'}, ${done} completed)</label>
+        <div id="planList" style="
+            max-height:200px;overflow-y:auto;border:1px solid var(--border-2);
+            border-radius:8px;background:var(--surface-2)">
+          ${existing.map((e, i) => `
+            <div class="flex" style="
+                gap:8px;padding:7px 10px;${i ? 'border-top:1px solid var(--border);' : ''}
+                ${e.done ? 'opacity:.55' : ''}">
+              <span class="muted small" style="width:22px">${e.seq}</span>
+              <span style="flex:1;min-width:0">
+                <span style="font-weight:600;font-size:13px">${esc(e.title)}</span>
+                <span class="small muted" style="display:block">${(e.parts || []).map(p => esc(p.text)).join(' · ')}</span>
+              </span>
+              ${e.done
+                ? '<span class="chip chip-good" style="padding:1px 7px;font-size:11px">Done</span>'
+                : `<button type="button" class="btn btn-sm btn-danger delDay" data-e="${esc(e.id)}"
+                     style="min-height:26px;padding:1px 8px;font-size:12px" title="Delete this day">&times;</button>`}
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
     Modal.open(`Daily plan — ${hb.name}`, `
-      <div class="small muted" style="margin-bottom:12px">
-        <b>One line per day.</b> The first thing on the line names the day; everything
-        after a <b>|</b> becomes an assignment that gets ticked off on its own:
+      ${listHtml}
+
+      <div class="small muted" style="margin-bottom:10px">
+        <b>Add days — one line each.</b> The first thing on the line names the day;
+        everything after a <b>|</b> becomes an assignment ticked off on its own:
         <div style="margin:6px 0"><code>Day 1: Foundation | 3 × 10 push-ups | 20 min walk | 30s plank</code></div>
         Days are used <b>in order</b>, one per day the habit is done. Miss a day and you
         resume where you left off — the progression never skips a step.
       </div>
 
-      ${existing.length
-        ? `<div class="banner" style="display:block;margin-bottom:12px">
-             This plan has <b>${existing.length} day${existing.length === 1 ? '' : 's'}</b>,
-             ${done} completed. Adding more extends the progression.
-           </div>` : ''}
-
       <div class="field">
-        <textarea id="txt" rows="9" placeholder="Day 1: Foundation | 3 x 10 push-ups | 20 min walk | 30s plank
+        <textarea id="txt" rows="7" placeholder="Day 1: Foundation | 3 x 10 push-ups | 20 min walk | 30s plank
 Day 2: Endurance | 3 x 12 push-ups | 25 min walk | 40s plank
 Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       </div>
@@ -762,14 +814,44 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       </div>` : '<input type="hidden" id="mode" value="append">'}
 
       <div id="preview" class="small muted"></div>
+
+      ${existing.length
+        ? `<button type="button" class="btn btn-danger btn-sm" id="clearPlan" style="margin-top:10px">
+             Remove the whole plan
+           </button>
+           <div class="small muted" style="margin-top:4px">
+             Turns this back into a simple one-tap habit. Streaks and the portfolio record
+             of what was actually done are kept.
+           </div>`
+        : ''}
     `, () => {
-      const { lessons } = Importer.parse(document.querySelector('#txt').value);
+      const text = document.querySelector('#txt').value.trim();
+      if (!text) return;                       // nothing typed: they only came to delete days
+
+      const { lessons } = Importer.parse(text);
       if (!lessons.length) { alert('No days found. Put one day on each line.'); return; }
 
-      const mode = document.querySelector('#mode').value || 'append';
-      Habits.setPlan(hb.id, lessons, mode);
+      Habits.setPlan(hb.id, lessons, document.querySelector('#mode').value || 'append');
       App.render();
     }, () => {
+      // delete a single day
+      document.querySelectorAll('.delDay').forEach(btn => {
+        btn.onclick = () => {
+          Habits.removePlanEntry(hb.id, btn.dataset.e);
+          Modal.close();
+          App.render();
+          planDialog(Store.habit(hb.id));      // reopen so they can carry on editing
+        };
+      });
+
+      const clear = document.querySelector('#clearPlan');
+      if (clear) clear.onclick = () => {
+        if (!confirm(`Remove the daily plan for "${hb.name}"?\n\nIt goes back to being a simple one-tap habit. Streaks and completed history are kept.`)) return;
+        Habits.clearPlan(hb.id);
+        Modal.close();
+        App.render();
+      };
+
       const txt = document.querySelector('#txt');
       const prev = document.querySelector('#preview');
 
@@ -780,7 +862,7 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
         const total = lessons.reduce((n, l) => n + l.parts.length, 0);
         prev.innerHTML = `<div class="banner" style="display:block">
             <b>${lessons.length} day${lessons.length === 1 ? '' : 's'}</b>,
-            <b>${total} assignment${total === 1 ? '' : 's'}</b> in total.
+            <b>${total} assignment${total === 1 ? '' : 's'}</b> to add.
             <ul style="margin:8px 0 0 18px">
               ${lessons.slice(0, 3).map(l => `<li><b>${esc(l.title)}</b>: ${l.parts.map(esc).join(' · ')}</li>`).join('')}
             </ul>

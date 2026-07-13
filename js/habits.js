@@ -165,6 +165,59 @@ const Habits = (() => {
   }
 
   /**
+   * Tick (or un-tick) a whole day of the plan in one go.
+   *
+   * This is what the big checkbox on the Habits page does. Previously that checkbox
+   * was DISABLED for planned habits, which made the most obvious place to complete a
+   * habit simply dead — a bad call. One tap should always be able to finish the day.
+   */
+  function completeEntry(habitId, entryId, date, value) {
+    const habit = Store.habit(habitId);
+    if (!habit) return false;
+
+    const entry = plan(habit).find(e => e.id === entryId);
+    if (!entry) return false;
+
+    (entry.parts || []).forEach(p => {
+      p.done = value;
+      p.doneOn = value ? date : null;
+    });
+
+    const wasDone = !!entry.done;
+    entry.done = value;
+    entry.doneOn = value ? date : null;
+
+    Store.update('habits', habitId, { plan: habit.plan });
+
+    if (value && !wasDone) setDone(habitId, date, true);
+    if (!value && wasDone) setDone(habitId, date, false);
+
+    return value;
+  }
+
+  /** Delete one day from the plan. Completed days are kept — that is real history. */
+  function removePlanEntry(habitId, entryId) {
+    const habit = Store.habit(habitId);
+    const entry = (habit.plan || []).find(e => e.id === entryId);
+    if (!entry || entry.done) return false;
+
+    entry.deleted = true;
+    Store.update('habits', habitId, { plan: habit.plan });
+    return true;
+  }
+
+  /**
+   * Remove the plan entirely, turning this back into a simple one-tap habit.
+   *
+   * Completed days are dropped from the plan too — but the streak history and the
+   * portfolio records of what was actually done are untouched, because those live
+   * elsewhere and are permanent.
+   */
+  function clearPlan(habitId) {
+    Store.update('habits', habitId, { plan: [] });
+  }
+
+  /**
    * Load a plan from a parsed list (same format as an academic curriculum).
    * 'replace' drops the unfinished entries; completed days are NEVER removed, because
    * that is a record of work the child actually did.
@@ -243,6 +296,7 @@ const Habits = (() => {
 
   return {
     EVERY_DAY, isDue, isDone, toggle, stats, history,
-    plan, hasPlan, currentEntry, entryFor, progress, togglePlanPart, setPlan
+    plan, hasPlan, currentEntry, entryFor, progress,
+    togglePlanPart, completeEntry, setPlan, removePlanEntry, clearPlan
   };
 })();
