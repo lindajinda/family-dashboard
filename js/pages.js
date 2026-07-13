@@ -155,23 +155,23 @@ const Pages = (() => {
     });
 
     root.appendChild(h(`
-      <div class="page-head">
+      <div class="page-head" style="margin-bottom:12px">
         <div>
-          <h1>Daily Schedule</h1>
-          <div class="sub">${esc(fmtDay(date))}${date === Store.today() ? '' : ' &middot; not today'}</div>
+          <h1 style="font-size:22px">Daily Schedule</h1>
+          <div class="sub" style="margin-bottom:0">${esc(fmtDay(date))}${date === Store.today() ? '' : ' &middot; not today'}</div>
         </div>
         <div class="segment" id="childPick">
           ${children.map(c => `<button data-c="${esc(c.id)}" class="${c.id === todayChild ? 'on' : ''}">${esc(c.name)}</button>`).join('')}
         </div>
       </div>
 
-      <div class="flex wrap" style="margin-bottom:18px">
-        <button class="btn btn-icon" id="prevDay" title="Previous day">&lsaquo;</button>
-        <button class="btn" id="goToday">Today</button>
-        <button class="btn btn-icon" id="nextDay" title="Next day">&rsaquo;</button>
+      <div class="flex wrap" style="margin-bottom:12px">
+        <button class="btn btn-icon" id="prevDay" title="Previous day" style="min-height:34px;min-width:34px">&lsaquo;</button>
+        <button class="btn" id="goToday" style="min-height:34px;padding:4px 14px">Today</button>
+        <button class="btn btn-icon" id="nextDay" title="Next day" style="min-height:34px;min-width:34px">&rsaquo;</button>
         <div class="right" style="min-width:240px">
           <div class="small muted">${partsDone} of ${parts} assignment${parts === 1 ? '' : 's'} done</div>
-          <div class="bar" style="margin-top:6px"><i style="width:${pct(partsDone, parts)}%"></i></div>
+          <div class="bar" style="margin-top:4px"><i style="width:${pct(partsDone, parts)}%"></i></div>
         </div>
       </div>
       <div id="banner"></div>
@@ -194,7 +194,7 @@ const Pages = (() => {
     renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
 
     const rows = root.querySelector('#rows');
-    rows.appendChild(h(`<h2 style="margin:22px 0 12px">Schoolwork</h2>`));
+    rows.appendChild(h(`<h2 style="margin:14px 0 8px;font-size:15px">Schoolwork</h2>`));
 
     if (!lessons.length) {
       rows.appendChild(h(`
@@ -233,9 +233,9 @@ const Pages = (() => {
     const overdue = mine.filter(t => t.due < date).length;
 
     const card = h(`
-      <div class="card" style="margin-top:22px">
-        <div class="flex" style="margin-bottom:12px">
-          <h2 style="margin:0">Tasks &amp; deadlines</h2>
+      <div class="card" style="margin-top:14px;padding:12px 14px">
+        <div class="flex" style="margin-bottom:8px">
+          <h2 style="margin:0;font-size:15px">Tasks &amp; deadlines</h2>
           ${overdue ? `<span class="chip chip-high">${overdue} overdue</span>` : ''}
           <span class="chip">${mine.length} in the next week</span>
           <button class="btn btn-sm right" data-go="tasks">All tasks &rarr;</button>
@@ -312,26 +312,32 @@ const Pages = (() => {
     const allDone = doneCount === parts.length && parts.length > 0;
     const started = doneCount > 0 && !allDone;
 
+    // Compact on purpose: the whole point of this page is seeing a child's day at a
+    // glance. Every extra pixel of padding is one fewer assignment on screen.
     const card = h(`
-      <div class="row ${allDone ? 'is-done' : ''}" style="align-items:stretch">
+      <div class="row ${allDone ? 'is-done' : ''}"
+           style="align-items:stretch; padding:9px 12px; margin-bottom:6px; gap:10px">
         <div class="stripe" style="background:${esc(s.color)}"></div>
         <div class="row-main">
-          <div class="row-meta">
-            <span class="row-subject" style="color:${esc(s.color)}">${esc(s.icon)} ${esc(s.name)}</span>
-            <span class="row-title" style="font-weight:500">${esc(l.title)}</span>
-            <span class="chip ${allDone ? 'chip-good' : (started ? 'chip-warn' : '')}">${doneCount}/${parts.length}</span>
-            ${l.priority === 'high' ? '<span class="chip chip-high">High</span>' : ''}
-            ${l.pinned ? '<span class="chip chip-info">&#128204; Fixed date</span>' : ''}
+          <div class="flex wrap" style="gap:8px">
+            <span style="font-weight:600;font-size:13px;color:${esc(s.color)}">${esc(s.icon)} ${esc(s.name)}</span>
+            <span style="font-size:13px" class="muted">${esc(l.title)}</span>
+            <span class="chip ${allDone ? 'chip-good' : (started ? 'chip-warn' : '')}"
+                  style="padding:1px 7px;font-size:11px">${doneCount}/${parts.length}</span>
+            ${l.priority === 'high' ? '<span class="chip chip-high" style="padding:1px 7px;font-size:11px">High</span>' : ''}
+            ${l.pinned ? '<span class="chip chip-info" style="padding:1px 7px;font-size:11px">&#128204; Fixed</span>' : ''}
           </div>
 
-          <div class="parts" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"></div>
+          <div class="parts" style="margin-top:6px;display:flex;flex-direction:column;gap:4px"></div>
 
-          ${l.notes ? `<div class="small muted" style="margin-top:8px">${esc(l.notes)}</div>` : ''}
+          ${l.notes ? `<div class="small muted" style="margin-top:5px">${esc(l.notes)}</div>` : ''}
         </div>
 
-        <div class="row-actions" style="align-items:flex-start">
-          <button class="btn btn-sm" data-act="move" ${allDone ? 'disabled' : ''}>Move to tomorrow</button>
-          <button class="btn btn-sm" data-act="note">Notes</button>
+        <div class="row-actions" style="align-items:flex-start;gap:6px">
+          <button class="btn btn-sm" data-act="move" ${allDone ? 'disabled' : ''}
+                  style="min-height:30px;padding:3px 10px;font-size:12px">Move &rarr;</button>
+          <button class="btn btn-sm btn-icon" data-act="note" title="Notes"
+                  style="min-height:30px;min-width:30px;padding:3px">&#128221;</button>
         </div>
       </div>
     `).firstElementChild;
@@ -341,11 +347,12 @@ const Pages = (() => {
     parts.forEach(p => {
       const line = h(`
         <label class="flex" style="
-            gap:12px; cursor:pointer; padding:8px 12px; border-radius:8px;
+            gap:9px; cursor:pointer; padding:5px 9px; border-radius:6px; font-size:13px;
             border:1px solid var(--border);
             background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
-          <span class="check ${p.done ? 'on' : ''}" style="width:26px;height:26px;flex:0 0 26px;font-size:15px">&#10003;</span>
-          <span style="${p.done ? 'text-decoration:line-through;opacity:.6' : ''}">${esc(p.text)}</span>
+          <span class="check ${p.done ? 'on' : ''}"
+                style="width:20px;height:20px;flex:0 0 20px;font-size:12px;border-radius:5px">&#10003;</span>
+          <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
         </label>
       `).firstElementChild;
 
@@ -411,9 +418,9 @@ const Pages = (() => {
     if (!upcoming.length) return;
 
     const card = h(`
-      <div class="card" style="margin-top:22px">
+      <div class="card" style="margin-top:14px;padding:12px 14px">
         <div class="flex">
-          <h2 style="margin:0">Work ahead</h2>
+          <h2 style="margin:0;font-size:15px">Work ahead</h2>
           <span class="chip">${upcoming.length} coming up</span>
           <button class="btn btn-sm right" id="toggle">${workAhead ? 'Hide' : 'Show'}</button>
         </div>
