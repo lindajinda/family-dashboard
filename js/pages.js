@@ -525,7 +525,11 @@ const Pages = (() => {
 
     const wrap = card.querySelector('#hb');
 
-    list.forEach(hb => {
+    // Simple habits (same thing every day) stay as one-tap pills.
+    const simple = list.filter(hb => !Habits.hasPlan(hb));
+    const planned = list.filter(hb => Habits.hasPlan(hb));
+
+    simple.forEach(hb => {
       const on = Habits.isDone(hb.id, date);
       const st = Habits.stats(hb, date);
 
@@ -550,6 +554,67 @@ const Pages = (() => {
 
       btn.onclick = () => { Habits.toggle(hb.id, date); App.render(); };
       wrap.appendChild(btn);
+    });
+
+    // Planned habits (exercise, elocution, skin care) show TODAY'S prescription:
+    // the next entry in the progression, with its own tickable assignments.
+    planned.forEach(hb => {
+      const entry = Habits.entryFor(hb, date);
+      const prog = Habits.progress(hb);
+      const st = Habits.stats(hb, date);
+
+      if (!entry) {                                   // the whole plan is finished
+        card.appendChild(h(`
+          <div class="flex" style="margin-top:8px;padding:8px 10px;border-radius:8px;
+               border:1px solid var(--border);background:var(--surface-2);gap:8px">
+            <span style="font-weight:600;font-size:13px;color:${esc(hb.color)}">${esc(hb.icon || '')} ${esc(hb.name)}</span>
+            <span class="chip chip-good" style="padding:1px 7px;font-size:11px">Plan complete &middot; ${prog.total} days</span>
+          </div>`));
+        return;
+      }
+
+      const parts = entry.parts || [];
+      const doneCount = parts.filter(p => p.done).length;
+      const allDone = doneCount === parts.length && parts.length > 0;
+
+      const block = h(`
+        <div style="margin-top:8px;padding:8px 10px;border-radius:8px;
+             border:1px solid ${allDone ? esc(hb.color) : 'var(--border)'};
+             background:var(--surface);">
+          <div class="flex wrap" style="gap:8px;margin-bottom:6px">
+            <span style="font-weight:600;font-size:13px;color:${esc(hb.color)}">${esc(hb.icon || '')} ${esc(hb.name)}</span>
+            <span class="muted small">${esc(entry.title)}</span>
+            <span class="chip ${allDone ? 'chip-good' : (doneCount ? 'chip-warn' : '')}"
+                  style="padding:1px 7px;font-size:11px">${doneCount}/${parts.length}</span>
+            <span class="chip" style="padding:1px 7px;font-size:11px">Day ${prog.current > prog.total ? prog.total : prog.current} of ${prog.total}</span>
+            ${st.current > 0 ? `<span class="chip" style="padding:1px 7px;font-size:11px">&#128293;${st.current}</span>` : ''}
+          </div>
+          <div class="pl" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+        </div>
+      `).firstElementChild;
+
+      const pw = block.querySelector('.pl');
+
+      parts.forEach(p => {
+        const line = h(`
+          <label class="flex" style="
+              gap:7px;cursor:pointer;padding:4px 9px;border-radius:14px;font-size:12px;
+              border:1px solid var(--border);
+              background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
+            <span class="check ${p.done ? 'on' : ''}"
+                  style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:5px">&#10003;</span>
+            <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
+          </label>`).firstElementChild;
+
+        line.onclick = e => {
+          e.preventDefault();
+          Habits.togglePlanPart(hb.id, entry.id, p.id, date);
+          App.render();
+        };
+        pw.appendChild(line);
+      });
+
+      card.appendChild(block);
     });
 
     mount.appendChild(card);
@@ -600,36 +665,145 @@ const Pages = (() => {
       const due = Habits.isDue(hb, date);
       const on = Habits.isDone(hb.id, date);
       const hist = Habits.history(hb, 21, date);
+      const planned = Habits.hasPlan(hb);
+      const prog = Habits.progress(hb);
+      const entry = planned ? Habits.entryFor(hb, date) : null;
 
       const row = h(`
-        <div class="row" style="${due ? '' : 'opacity:.55'}">
+        <div class="row">
           <div class="stripe" style="background:${esc(hb.color)}"></div>
-          <button class="check ${on ? 'on' : ''}">✓</button>
+          <button class="check ${on ? 'on' : ''}" ${planned ? 'disabled title="Tick the individual assignments on the Today page"' : ''}>✓</button>
           <div class="row-main">
             <div class="row-meta">
               <span class="row-subject">${esc(hb.icon || '')} ${esc(hb.name)}</span>
               ${st.current > 0 ? `<span class="chip chip-good">🔥 ${st.current} day streak</span>` : '<span class="chip">No streak yet</span>'}
               <span class="chip">Best ${st.longest}</span>
               <span class="chip">${st.rate}%</span>
+              ${planned
+                ? `<span class="chip chip-info">📋 Plan · day ${Math.min(prog.current, prog.total)} of ${prog.total}</span>`
+                : ''}
               ${due ? '' : '<span class="chip chip-warn">Not scheduled today</span>'}
             </div>
+
+            ${planned && entry
+              ? `<div class="small muted" style="margin-top:4px">
+                   Next: <b>${esc(entry.title)}</b> — ${(entry.parts || []).map(p => esc(p.text)).join(' · ')}
+                 </div>`
+              : ''}
+            ${planned && !entry
+              ? '<div class="small muted" style="margin-top:4px">Plan complete. Add more days to keep the progression going.</div>'
+              : ''}
+
             <div class="dots" style="margin-top:6px">
               ${hist.map(d => `<i class="${d.done ? 'done' : (d.due ? 'miss' : '')}" title="${d.date}"></i>`).join('')}
             </div>
           </div>
           <div class="row-actions">
+            <button class="btn btn-sm" data-act="plan">${planned ? '📋 Daily plan' : '📋 Add daily plan'}</button>
             <button class="btn btn-sm" data-act="edit">Edit</button>
           </div>
         </div>
       `).firstElementChild;
 
-      row.querySelector('.check').onclick = () => { Habits.toggle(hb.id, date); App.render(); };
+      const chk = row.querySelector('.check');
+      if (!planned) chk.onclick = () => { Habits.toggle(hb.id, date); App.render(); };
+
       row.querySelector('[data-act="edit"]').onclick = () => editHabit(hb, habitChild);
+      row.querySelector('[data-act="plan"]').onclick = () => planDialog(hb);
+
       rows.appendChild(row);
     });
   }
 
+  /* ------------------------------------------------------- habit daily plans
+
+     Exercise, elocution and a skin regimen are not "the same thing every day" —
+     they are progressions. So a habit can carry a plan: an ordered list of days,
+     each with its own tickable assignments, loaded exactly like an academic
+     curriculum.
+
+     The plan advances by CONSUMPTION, not by date: the day shown is the next one
+     not yet done. Miss Tuesday and you resume at day 12 rather than skipping to
+     day 13 — a strength progression that drops a session is worse than useless. */
+
+  function planDialog(hb) {
+    const existing = Habits.plan(hb);
+    const done = existing.filter(e => e.done).length;
+
+    Modal.open(`Daily plan — ${hb.name}`, `
+      <div class="small muted" style="margin-bottom:12px">
+        <b>One line per day.</b> The first thing on the line names the day; everything
+        after a <b>|</b> becomes an assignment that gets ticked off on its own:
+        <div style="margin:6px 0"><code>Day 1: Foundation | 3 × 10 push-ups | 20 min walk | 30s plank</code></div>
+        Days are used <b>in order</b>, one per day the habit is done. Miss a day and you
+        resume where you left off — the progression never skips a step.
+      </div>
+
+      ${existing.length
+        ? `<div class="banner" style="display:block;margin-bottom:12px">
+             This plan has <b>${existing.length} day${existing.length === 1 ? '' : 's'}</b>,
+             ${done} completed. Adding more extends the progression.
+           </div>` : ''}
+
+      <div class="field">
+        <textarea id="txt" rows="9" placeholder="Day 1: Foundation | 3 x 10 push-ups | 20 min walk | 30s plank
+Day 2: Endurance | 3 x 12 push-ups | 25 min walk | 40s plank
+Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
+      </div>
+
+      ${existing.length ? `
+      <div class="field">
+        <label>These new days should</label>
+        <select id="mode">
+          <option value="append">Continue the plan (add to the end)</option>
+          <option value="replace">Replace the days not yet done</option>
+        </select>
+        <div class="small muted" style="margin-top:6px">Completed days are never removed.</div>
+      </div>` : '<input type="hidden" id="mode" value="append">'}
+
+      <div id="preview" class="small muted"></div>
+    `, () => {
+      const { lessons } = Importer.parse(document.querySelector('#txt').value);
+      if (!lessons.length) { alert('No days found. Put one day on each line.'); return; }
+
+      const mode = document.querySelector('#mode').value || 'append';
+      Habits.setPlan(hb.id, lessons, mode);
+      App.render();
+    }, () => {
+      const txt = document.querySelector('#txt');
+      const prev = document.querySelector('#preview');
+
+      const update = () => {
+        const { lessons } = Importer.parse(txt.value);
+        if (!lessons.length) { prev.innerHTML = ''; return; }
+
+        const total = lessons.reduce((n, l) => n + l.parts.length, 0);
+        prev.innerHTML = `<div class="banner" style="display:block">
+            <b>${lessons.length} day${lessons.length === 1 ? '' : 's'}</b>,
+            <b>${total} assignment${total === 1 ? '' : 's'}</b> in total.
+            <ul style="margin:8px 0 0 18px">
+              ${lessons.slice(0, 3).map(l => `<li><b>${esc(l.title)}</b>: ${l.parts.map(esc).join(' · ')}</li>`).join('')}
+            </ul>
+            ${lessons.length > 3 ? `<div class="small muted" style="margin-top:4px">…and ${lessons.length - 3} more</div>` : ''}
+          </div>`;
+      };
+
+      txt.oninput = update;
+      update();
+    });
+  }
+
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  /** "Mon–Fri" is the default and not worth saying; anything else is worth a chip. */
+  function dayLabel(s) {
+    const mask = (s.days === undefined || s.days === null) ? Store.WEEKDAYS : s.days;
+    if (mask === Store.WEEKDAYS) return '';
+
+    const picked = DAYS.filter((_, i) => (mask >> i) & 1);
+    const text = mask === 127 ? 'Every day' : picked.join(', ');
+    return `<span class="chip chip-info" style="margin-left:8px">📅 ${esc(text)}</span>`;
+  }
 
   function editHabit(hb, childId) {
     const mask = hb ? hb.days : 0b0111110;
@@ -707,6 +881,7 @@ const Pages = (() => {
             <span style="font-size:20px">${esc(s.icon || '')}</span>
             <b style="color:${esc(s.color)};margin-left:6px">${esc(s.name)}</b>
             ${s.archived ? '<span class="chip chip-warn" style="margin-left:8px">Archived</span>' : ''}
+            ${dayLabel(s)}
           </td>
           <td>${assigned.length ? assigned.map(c => `<span class="chip" style="margin-right:4px">${esc(c.name)}</span>`).join('') : '<span class="muted small">Nobody</span>'}</td>
           <td>${lessonCount}</td>
@@ -808,6 +983,22 @@ const Pages = (() => {
       <div class="field"><label>Name</label><input type="text" id="n" value="${esc(s ? s.name : '')}" placeholder="e.g. Organic Chemistry"></div>
       ${iconPickerHtml(s ? s.icon : '📘')}
       <div class="field"><label>Colour</label><input type="color" id="c" value="${esc(s ? s.color : '#0F6CBD')}" style="height:44px"></div>
+
+      <div class="field">
+        <label>Which days does this subject run?</label>
+        <div class="flex wrap">
+          ${DAYS.map((d, i) => {
+            const mask = s && s.days !== undefined && s.days !== null ? s.days : Store.WEEKDAYS;
+            return `<label class="chip" style="cursor:pointer;padding:8px 12px">
+              <input type="checkbox" class="sd" data-d="${i}" ${(mask >> i) & 1 ? 'checked' : ''}
+                     style="width:auto;min-height:0"> ${d}</label>`;
+          }).join('')}
+        </div>
+        <div class="small muted" style="margin-top:6px">
+          Lessons are only scheduled on these days. Tick Sunday alone for a Sunday-only
+          subject; tick Monday and Tuesday for a twice-a-week one.
+        </div>
+      </div>
       <div class="field">
         <label>Assign to</label>
         <div class="flex wrap">
@@ -818,15 +1009,34 @@ const Pages = (() => {
       </div>
       ${s ? `<button class="btn btn-danger btn-sm" id="arch">${s.archived ? 'Un-archive' : 'Archive this subject'}</button>` : ''}
     `, () => {
+      let days = 0;
+      document.querySelectorAll('.sd').forEach(cb => {
+        if (cb.checked) days |= (1 << Number(cb.dataset.d));
+      });
+
       const rec = {
         name: document.querySelector('#n').value.trim() || 'Untitled',
         icon: document.querySelector('#i').value,
-        color: document.querySelector('#c').value
+        color: document.querySelector('#c').value,
+        // A subject with no days ticked could never be scheduled at all, and the
+        // lessons would silently vanish from every schedule. Fall back to weekdays.
+        days: days || Store.WEEKDAYS
       };
 
       const subject = s
         ? Store.update('subjects', s.id, rec)
         : Store.add('subjects', Object.assign({ order: Store.allSubjects().length, archived: false }, rec));
+
+      // Changing the days invalidates the existing dates: a Monday-only subject with
+      // lessons sitting on Wednesdays would show work on days it does not run. Re-lay
+      // the unfinished ones. Completed and pinned lessons keep their dates.
+      const daysChanged = s && (s.days === undefined ? Store.WEEKDAYS : s.days) !== rec.days;
+      if (daysChanged) {
+        Store.children().forEach(c => {
+          const cur = Store.curriculumFor(c.id, subject.id);
+          if (cur) Importer.layOutIncomplete(cur.id, Store.today());
+        });
+      }
 
       // Assigning a subject to a child = creating a curriculum for them. Un-assigning
       // soft-deletes it, so the completed history in the portfolio survives.

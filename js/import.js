@@ -153,13 +153,15 @@ const Importer = (() => {
   /** One unfinished lesson per school day, in sequence. Done and pinned stay put. */
   function layOutIncomplete(curriculumId, startDate) {
     const seq = Store.sequence(curriculumId).filter(l => !l.hidden);
-    let cursor = Store.isSchoolDay(startDate) ? startDate : Store.nextSchoolDay(startDate);
+    let cursor = Store.isDayAllowed(curriculumId, startDate)
+      ? startDate
+      : Store.nextDayFor(curriculumId, startDate);
 
     seq.forEach(lesson => {
       if (Store.isLessonDone(lesson)) return;               // history is fixed
       if (lesson.pinned && lesson.date) return;             // fixed-date lessons stay
       Store.update('lessons', lesson.id, { date: cursor });
-      cursor = Store.nextSchoolDay(cursor);
+      cursor = Store.nextDayFor(curriculumId, cursor);
     });
   }
 

@@ -248,6 +248,42 @@ const Store = (() => {
       return d;
     },
 
+    /* --------------------------------------------- which days does a subject run?
+
+       Some subjects do not run every weekday: Theology on Sundays only, Chinese on
+       Mondays and Tuesdays. Each subject carries a 7-bit day mask (bit 0 = Sunday),
+       defaulting to Mon–Fri, which is exactly the old behaviour.
+
+       Note this REPLACES the weekday rule rather than adding to it — otherwise a
+       Sunday-only subject could never be scheduled at all, because Sunday is not a
+       "school day". Holidays still block everything. */
+
+    WEEKDAYS: 0b0111110,   // Mon..Fri
+
+    daysOfCurriculum(curriculumId) {
+      const cur = api.curriculum(curriculumId);
+      const subj = cur && api.subject(cur.subjectId);
+      return (subj && subj.days !== undefined && subj.days !== null)
+        ? subj.days
+        : api.WEEKDAYS;
+    },
+
+    isDayAllowed(curriculumId, date) {
+      if (api.holidays().some(h => h.date === date)) return false;
+      const mask = api.daysOfCurriculum(curriculumId);
+      return (mask & (1 << dayOfWeek(date))) !== 0;
+    },
+
+    /** The next day this particular subject is allowed to run. */
+    nextDayFor(curriculumId, date) {
+      let d = addDays(date, 1);
+      for (let i = 0; i < 800; i++) {
+        if (api.isDayAllowed(curriculumId, d)) return d;
+        d = addDays(d, 1);
+      }
+      return d;   // a subject with no days ticked: give up rather than loop
+    },
+
     /* ------------------------------------------------------------- mutations */
 
     add(collection, record) {

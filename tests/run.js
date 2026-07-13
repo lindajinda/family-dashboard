@@ -589,6 +589,187 @@ test('old single-checkbox lessons are migrated to a one-part day, keeping their 
   ok(Store.isLessonDone(l), 'so the day still reads as done');
 });
 
+/* ============================================================== HABIT PLANS */
+
+console.log('\nHabit daily plans (progressions)');
+
+function plannedHabit(days) {
+  const hb = habitFixture(days === undefined ? EVERY : days);
+  const { lessons } = Importer.parse(
+    'Day 1: Foundation | 10 push-ups | 20 min walk\n' +
+    'Day 2: Build | 12 push-ups | 25 min walk\n' +
+    'Day 3: Push | 15 push-ups | 30 min walk');
+  Habits.setPlan(hb.id, lessons, 'append');
+  return Store.habit(hb.id);
+}
+
+test('a habit plan loads from the same paste format as a curriculum', () => {
+  const hb = plannedHabit();
+  eq(Habits.plan(hb).length, 3);
+  eq(Habits.plan(hb)[0].title, 'Day 1: Foundation');
+  eq(Habits.plan(hb)[0].parts.map(p => p.text), ['10 push-ups', '20 min walk']);
+});
+
+test('today shows the first entry not yet done', () => {
+  const hb = plannedHabit();
+  eq(Habits.currentEntry(hb).title, 'Day 1: Foundation');
+});
+
+test('the habit only counts as done when EVERY assignment in the day is ticked', () => {
+  const hb = plannedHabit();
+  const e = Habits.currentEntry(hb);
+
+  Habits.togglePlanPart(hb.id, e.id, e.parts[0].id, MON);
+  ok(!Habits.isDone(hb.id, MON), 'half a workout is not a workout');
+
+  Habits.togglePlanPart(hb.id, e.id, e.parts[1].id, MON);
+  ok(Habits.isDone(hb.id, MON), 'now the day counts, and the streak sees it');
+});
+
+test('the plan ADVANCES only when a day is finished', () => {
+  const hb = plannedHabit();
+  const e1 = Habits.currentEntry(hb);
+  e1.parts.forEach(p => Habits.togglePlanPart(hb.id, e1.id, p.id, MON));
+
+  eq(Habits.currentEntry(Store.habit(hb.id)).title, 'Day 2: Build', 'day 2 is next');
+});
+
+test('MISSING A DAY DOES NOT SKIP A STEP OF THE PROGRESSION', () => {
+  // The whole reason plans advance by consumption rather than by date. Skip Tuesday
+  // and you resume at Day 2 -- you do NOT jump to Day 3. A strength or skincare
+  // progression that silently drops a stage is worse than useless.
+  const hb = plannedHabit();
+  const e1 = Habits.currentEntry(hb);
+  e1.parts.forEach(p => Habits.togglePlanPart(hb.id, e1.id, p.id, MON));
+
+  // Tuesday: nothing happens at all. Wednesday: what is next?
+  eq(Habits.currentEntry(Store.habit(hb.id)).title, 'Day 2: Build',
+     'Wednesday still offers Day 2, not Day 3');
+});
+
+test('un-ticking an assignment re-opens the day and un-does the streak', () => {
+  const hb = plannedHabit();
+  const e = Habits.currentEntry(hb);
+  e.parts.forEach(p => Habits.togglePlanPart(hb.id, e.id, p.id, MON));
+  ok(Habits.isDone(hb.id, MON));
+
+  Habits.togglePlanPart(hb.id, e.id, e.parts[0].id, MON);   // mis-tap, undo
+
+  ok(!Habits.isDone(hb.id, MON), 'the day no longer counts');
+  eq(Habits.currentEntry(Store.habit(hb.id)).title, 'Day 1: Foundation', 'back to day 1');
+});
+
+test('looking at a past day shows what was done THAT day, not today\'s next entry', () => {
+  const hb = plannedHabit();
+  const e1 = Habits.currentEntry(hb);
+  e1.parts.forEach(p => Habits.togglePlanPart(hb.id, e1.id, p.id, MON));
+
+  const fresh = Store.habit(hb.id);
+  eq(Habits.entryFor(fresh, MON).title, 'Day 1: Foundation', 'Monday still shows Monday');
+  eq(Habits.entryFor(fresh, TUE).title, 'Day 2: Build', 'Tuesday shows what is next');
+});
+
+test('extending a plan keeps completed days; replacing keeps them too', () => {
+  const hb = plannedHabit();
+  const e1 = Habits.currentEntry(hb);
+  e1.parts.forEach(p => Habits.togglePlanPart(hb.id, e1.id, p.id, MON));
+
+  const { lessons } = Importer.parse('Day 9: New | something');
+  Habits.setPlan(hb.id, lessons, 'replace');
+
+  const p = Habits.plan(Store.habit(hb.id));
+  ok(p.some(e => e.title === 'Day 1: Foundation' && e.done), 'the completed day survived');
+  ok(p.some(e => e.title === 'Day 9: New'), 'the new day is there');
+  ok(!p.some(e => e.title === 'Day 3: Push'), 'the unfinished days were replaced');
+});
+
+test('a habit with no plan still works as a simple one-tap habit', () => {
+  const hb = habitFixture(EVERY);
+  ok(!Habits.hasPlan(hb), 'no plan');
+  Habits.toggle(hb.id, MON);
+  ok(Habits.isDone(hb.id, MON));
+});
+
+/* ====================================================== SUBJECT DAYS OF WEEK */
+
+console.log('\nSubjects that only run on certain days');
+
+const SUN_ONLY = 0b0000001;   // bit 0 = Sunday
+const MON_TUE  = 0b0000110;
+
+function subjectOnDays(mask) {
+  const b = build([]);
+  Store.update('subjects', b.subj.id, { days: mask });
+  return b;
+}
+
+test('a Sunday-only subject schedules on SUNDAYS, not weekdays', () => {
+  // The trap: Sunday is not a "school day", so a naive implementation would never be
+  // able to schedule this subject at all and the lessons would silently vanish.
+  const { cur } = subjectOnDays(SUN_ONLY);
+  const { lessons } = Importer.parse('Week 1\nWeek 2\nWeek 3');
+  Importer.apply(cur.id, lessons, MON, 'append');            // starting from a Monday
+
+  const ds = Store.sequence(cur.id).map(l => l.date);
+  ds.forEach(d => eq(Store.dayOfWeek(d), 0, `${d} is a Sunday`));
+  eq(ds, ['2026-09-20', '2026-09-27', '2026-10-04'], 'one per week');
+});
+
+test('a Mon+Tue subject uses only Mondays and Tuesdays', () => {
+  const { cur } = subjectOnDays(MON_TUE);
+  const { lessons } = Importer.parse('L1\nL2\nL3\nL4');
+  Importer.apply(cur.id, lessons, MON, 'append');
+
+  eq(Store.sequence(cur.id).map(l => l.date),
+     [MON, TUE, '2026-09-21', '2026-09-22'], 'Mon, Tue, next Mon, next Tue');
+});
+
+test('shifting a Mon+Tue subject skips to the next ALLOWED day, not just the next weekday', () => {
+  const { cur } = subjectOnDays(MON_TUE);
+  const { lessons } = Importer.parse('L1\nL2');
+  Importer.apply(cur.id, lessons, MON, 'append');            // Mon, Tue
+
+  Scheduler.shiftCurriculum(cur.id, TUE);                    // Tuesday not finished
+
+  eq(Store.lesson(Store.sequence(cur.id)[1].id).date, '2026-09-21',
+     'it went to next Monday, not Wednesday');
+});
+
+test('working ahead in a Sunday-only subject pulls up to the next SUNDAY', () => {
+  const { cur } = subjectOnDays(SUN_ONLY);
+  const { lessons } = Importer.parse('W1\nW2\nW3');
+  Importer.apply(cur.id, lessons, MON, 'append');            // 20th, 27th, 4th
+
+  const [w1, w2] = Store.sequence(cur.id);
+  Store.partsOf(w1).forEach(p => Store.togglePart(w1.id, p.id, '2026-09-20'));
+  Store.partsOf(w2).forEach(p => Store.togglePart(w2.id, p.id, '2026-09-20'));  // both early
+
+  Scheduler.afterCompletion(cur.id, '2026-09-20');
+
+  eq(Store.lesson(Store.sequence(cur.id)[2].id).date, '2026-09-27',
+     'week 3 pulled up to the next Sunday');
+});
+
+test('a subject with the default days behaves exactly as before', () => {
+  const { cur } = build([]);                                 // no days set at all
+  const { lessons } = Importer.parse('A\nB\nC\nD\nE\nF');
+  Importer.apply(cur.id, lessons, THU, 'append');
+
+  eq(Store.sequence(cur.id).map(l => l.date),
+     [THU, FRI, NEXT_MON, '2026-09-22', '2026-09-23', '2026-09-24'],
+     'Mon-Fri, weekend skipped — unchanged');
+});
+
+test('holidays still block a Sunday-only subject', () => {
+  const { cur } = subjectOnDays(SUN_ONLY);
+  Store.add('holidays', { date: '2026-09-20', label: 'Away' });
+
+  const { lessons } = Importer.parse('W1');
+  Importer.apply(cur.id, lessons, MON, 'append');
+
+  eq(Store.sequence(cur.id)[0].date, '2026-09-27', 'it skipped the blocked Sunday');
+});
+
 /* ==================================================================== report */
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

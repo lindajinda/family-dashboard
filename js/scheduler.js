@@ -56,8 +56,8 @@ const Scheduler = (() => {
       const lesson = movers[i];
       const from = lesson.date;
 
-      let to = Store.nextSchoolDay(from);
-      while (pinnedDates.has(to)) to = Store.nextSchoolDay(to);
+      let to = Store.nextDayFor(curriculumId, from);
+      while (pinnedDates.has(to)) to = Store.nextDayFor(curriculumId, to);
 
       Store.update('lessons', lesson.id, { date: to });
       moves.push({ id: lesson.id, title: lesson.title, from, to });
@@ -103,14 +103,16 @@ const Scheduler = (() => {
       if (Store.isLessonDone(l) || l.pinned) occupied.add(l.date);
     });
 
-    let cursor = Store.isSchoolDay(fromDate) ? fromDate : Store.nextSchoolDay(fromDate);
+    let cursor = Store.isDayAllowed(curriculumId, fromDate)
+      ? fromDate
+      : Store.nextDayFor(curriculumId, fromDate);
     const moves = [];
 
     seq.forEach(lesson => {
       if (Store.isLessonDone(lesson)) return;       // history is fixed
       if (lesson.pinned && lesson.date) return;     // fixed-date work does not move
 
-      while (occupied.has(cursor)) cursor = Store.nextSchoolDay(cursor);
+      while (occupied.has(cursor)) cursor = Store.nextDayFor(curriculumId, cursor);
 
       const current = lesson.date;
       // Only ever pull up. A lesson already at or before the free slot (an overdue
@@ -123,7 +125,7 @@ const Scheduler = (() => {
       }
 
       occupied.add(landing);
-      cursor = Store.nextSchoolDay(landing);
+      cursor = Store.nextDayFor(curriculumId, landing);
     });
 
     return moves;
@@ -143,12 +145,14 @@ const Scheduler = (() => {
    */
   function layOut(curriculumId, startDate) {
     const seq = Store.sequence(curriculumId);
-    let cursor = Store.isSchoolDay(startDate) ? startDate : Store.nextSchoolDay(startDate);
+    let cursor = Store.isDayAllowed(curriculumId, startDate)
+      ? startDate
+      : Store.nextDayFor(curriculumId, startDate);
 
     seq.forEach(lesson => {
       if (lesson.pinned && lesson.date) return;   // pinned lessons keep their date
       Store.update('lessons', lesson.id, { date: cursor });
-      cursor = Store.nextSchoolDay(cursor);
+      cursor = Store.nextDayFor(curriculumId, cursor);
     });
   }
 
