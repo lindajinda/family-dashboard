@@ -101,6 +101,13 @@ const App = (() => {
     { id: 'settings',  label: 'Settings',   icon: '⚙️' }
   ];
 
+  // What a child gets. Everything they need to do their day, and nothing else: no
+  // Curriculum to rearrange, no Portfolio to edit, no Settings holding the token.
+  const KID_NAV = [
+    { id: 'today',  label: 'Today',  icon: '📅' },
+    { id: 'habits', label: 'Habits', icon: '✅' }
+  ];
+
   let page = 'today';
 
   function go(id, opts) {
@@ -109,28 +116,67 @@ const App = (() => {
     render();
   }
 
+  /**
+   * The two typeface knobs from Settings → Text, pushed onto <body> where the CSS can
+   * act on them. The defaults are the readable ones — Verdana, bold — because that is
+   * the point of the setting; "Standard" and "Normal" are the ones you opt back into.
+   */
+  function applyText() {
+    const s = Store.settings || {};
+    document.body.classList.toggle('font-verdana', (s.font || 'verdana') === 'verdana');
+    document.body.classList.toggle('text-bold', s.bold !== false);
+  }
+
   function render() {
     const nav = document.querySelector('#nav');
     const main = document.querySelector('#main');
 
+    applyText();
+
+    const kid = Device.child();          // null on a parent device — the normal case
+    const items = kid ? KID_NAV : NAV;
+
+    // A kid device must not be able to reach a hidden page by any route: not by a
+    // stale `page` left over from before it was locked, and not by a [data-go] button
+    // buried in a card. Everything funnels through here, so this one line holds.
+    if (kid && !items.some(n => n.id === page)) page = 'today';
+
     nav.innerHTML = `
-      <div class="brand"><span class="logo">🎓</span> Family Dashboard</div>
-      ${NAV.map(n => n.sep
+      <div class="brand"><span class="logo">🎓</span> <span id="brandName">Family Dashboard</span></div>
+      ${items.map(n => n.sep
         ? '<div class="nav-sep"></div>'
         : `<button class="nav-item ${n.id === page ? 'active' : ''}" data-p="${n.id}">
              <span class="ico">${n.icon}</span> ${n.label}
            </button>`).join('')}
       <div style="flex:1"></div>
-      <button class="nav-item" data-p="settings" id="syncPill" style="font-size:11px;color:var(--text-2)">
+      <button class="nav-item" ${kid ? '' : 'data-p="settings"'} id="syncPill" style="font-size:13px;color:var(--text-2)">
         <span class="ico" id="syncDot">•</span> <span id="syncText">Saved locally</span>
       </button>
+      ${kid ? `<button class="nav-item" id="unlock" style="font-size:13px;color:var(--text-3)">
+                 <span class="ico">🔒</span> Parent
+               </button>` : ''}
     `;
+
+    // textContent, not the template: a child's name is free text and this is the one
+    // place in the nav where family-authored data meets HTML.
+    if (kid) nav.querySelector('#brandName').textContent = kid.name;
 
     paintSync();
 
     nav.onclick = e => {
       const b = e.target.closest('.nav-item');
-      if (b) go(b.dataset.p);
+      if (b && b.dataset.p) go(b.dataset.p);   // the unlock button has no page: skip it
+    };
+
+    const unlock = nav.querySelector('#unlock');
+    if (unlock) unlock.onclick = () => {
+      if (Device.hasPin()) {
+        const pin = prompt('Parent PIN');
+        if (pin === null) return;                                        // cancelled
+        if (!Device.checkPin(pin)) { alert('That PIN is not right.'); return; }
+      }
+      Device.setParent();
+      go('today');
     };
 
     main.innerHTML = '';

@@ -31,8 +31,26 @@
   --shadow:        0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.06);
   --shadow-lg:     0 2px 4px rgba(0,0,0,.06), 0 8px 20px rgba(0,0,0,.10);
 
-  --nav-w:         188px;
+  --nav-w:         215px;   /* Verdana is wide; the nav labels must not wrap */
+
+  /* TYPEFACE AND WEIGHT — the two knobs behind Settings → Text.
+
+     Only fonts that are ALREADY on the machine. A downloaded web font would mean the
+     app stops looking right the moment it is opened offline or from a file, and it
+     adds one more thing that can rot. Verdana was drawn for screens: a tall x-height
+     and wide, open letters, which is exactly what makes it easier to read than Segoe
+     at a glance — and it is on every Windows and Mac made this century.
+
+     --fw is the body weight; --fw-strong is everything that needs to stand out FROM
+     the body. They move together, so turning on bold does not flatten the page into
+     one undifferentiated slab. */
+  --font-body:     "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --fw:            400;
+  --fw-strong:     600;
 }
+
+body.font-verdana { --font-body: Verdana, Tahoma, Geneva, sans-serif; }
+body.text-bold    { --fw: 600; --fw-strong: 700; }
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -56,11 +74,20 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* TYPE IS LARGE, SPACING IS TIGHT — and that is on purpose.
+
+   The two are usually raised together, which is exactly what we do not want: a page
+   that is comfortable to READ but shows you half a day. So the type scale below is
+   generous and the padding, margins and gaps throughout this file are not. If you
+   are about to make something bigger, check first whether it is TEXT or SPACE. Text,
+   yes. Space, no. */
+
 body {
-  font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
+  font-weight: var(--fw);
   background: var(--bg);
   color: var(--text);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
 }
@@ -87,12 +114,12 @@ body {
 .nav .brand {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 8px 12px;
-  font-weight: 600; font-size: 14px;
+  font-weight: var(--fw-strong); font-size: 16px;
 }
 .nav .brand .logo {
   width: 26px; height: 26px; border-radius: 7px;
   background: var(--accent); color: #fff;
-  display: grid; place-items: center; font-size: 15px;
+  display: grid; place-items: center; font-size: 17px;
 }
 
 .nav-item {
@@ -108,16 +135,16 @@ body {
 .nav-item:hover { background: rgba(0,0,0,.04); }
 @media (prefers-color-scheme: dark) { .nav-item:hover { background: rgba(255,255,255,.06); } }
 
-.nav-item.active { background: var(--accent-soft); font-weight: 600; }
+.nav-item.active { background: var(--accent-soft); font-weight: var(--fw-strong); }
 .nav-item.active::before {
   content: ''; position: absolute; left: 0; top: 20%; height: 60%;
   width: 3px; border-radius: 2px; background: var(--accent);
 }
-.nav-item .ico { width: 18px; text-align: center; font-size: 14px; }
+.nav-item .ico { width: 20px; text-align: center; font-size: 16px; }
 .nav-sep { height: 1px; background: var(--border); margin: 6px 8px; }
 .nav-label {
-  font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--text-3); padding: 8px 10px 4px; font-weight: 600;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-3); padding: 8px 10px 4px; font-weight: var(--fw-strong);
 }
 
 .main { flex: 1; min-width: 0; padding: 10px 16px 28px; }
@@ -128,9 +155,9 @@ body {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
 }
-h1 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
-.sub { color: var(--text-2); font-size: 11px; margin-top: 0; }
-h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+h1 { font-size: 20px; font-weight: var(--fw-strong); letter-spacing: -.01em; }
+.sub { color: var(--text-2); font-size: 13px; margin-top: 0; }
+h2 { font-size: 15px; font-weight: var(--fw-strong); margin-bottom: 6px; }
 
 /* -------------------------------------------------------------------- cards */
 
@@ -151,7 +178,7 @@ h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 28px; padding: 3px 10px;
+  min-height: 30px; padding: 3px 10px;
   border-radius: var(--radius);
   border: 1px solid var(--border-2);
   background: var(--surface);
@@ -166,16 +193,16 @@ h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
 .btn-primary {
   background: var(--accent); border-color: var(--accent); color: #fff;
-  min-height: 30px; font-weight: 600;
+  min-height: 32px; font-weight: var(--fw-strong);
 }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 
 .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
 .btn-green:hover { filter: brightness(1.08); }
 
-.btn-lg { min-height: 32px; padding: 5px 14px; font-size: 12px; }
-.btn-sm { min-height: 23px; padding: 1px 8px; font-size: 11px; }
-.btn-icon { min-width: 28px; padding: 3px; }
+.btn-lg { min-height: 34px; padding: 5px 14px; font-size: 15px; }
+.btn-sm { min-height: 25px; padding: 1px 8px; font-size: 13px; }
+.btn-icon { min-width: 30px; padding: 3px; }
 .btn-danger { color: var(--red); border-color: var(--border-2); }
 .btn-danger:hover { background: #FDF3F2; }
 
@@ -198,8 +225,8 @@ h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
 .row-main { flex: 1; min-width: 0; }
 .row-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 1px; }
-.row-subject { font-weight: 600; font-size: 12px; }
-.row-title { font-size: 12px; }
+.row-subject { font-weight: var(--fw-strong); font-size: 14px; }
+.row-title { font-size: 14px; }
 .row-actions { display: flex; gap: 5px; flex-shrink: 0; }
 
 /* big, obvious checkbox — one click to complete */
@@ -210,7 +237,7 @@ h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
   background: var(--surface);
   cursor: pointer;
   display: grid; place-items: center;
-  color: transparent; font-size: 12px; font-weight: 700;
+  color: transparent; font-size: 14px; font-weight: 700;
   transition: all .12s;
 }
 .check:hover { border-color: var(--accent); }
@@ -218,12 +245,49 @@ h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
   background: var(--green); border-color: var(--green); color: #fff;
 }
 
+/* -------------------------------------------------------------- assignments
+
+   One assignment — a reading, a problem set — as it appears on the Today page, in
+   the day's schoolwork and in Work ahead alike. It is the same control in both, so
+   it is defined once, here.
+
+   This is the thing the page exists for: it is what gets read, and it is what gets
+   tapped, by a parent at a desk and by a child on a tablet. So it is deliberately
+   the largest, plainest element on the page. Everything AROUND it — chips, dates,
+   subject names, progress bars — stays small and out of the way. Compact page,
+   generous target; those are not in conflict, and this is where the line is drawn. */
+
+.part {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  min-height: 40px;                 /* comfortably tappable on a tablet */
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 16px; line-height: 1.35;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.part:hover { background: var(--accent-soft); border-color: var(--accent); }
+.part:active { background: var(--surface-2); }
+
+/* The whole row is the target, not just the little box in it. Nobody should have to
+   aim, least of all a six-year-old. */
+.part .check {
+  width: 24px; height: 24px; flex: 0 0 24px;
+  font-size: 15px;
+}
+.part:hover .check { border-color: var(--accent); }
+
+.part.done { background: var(--surface-2); border-color: var(--border); }
+.part.done .part-text { text-decoration: line-through; opacity: .5; }
+
 /* -------------------------------------------------------------------- chips */
 
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 0 6px; border-radius: 999px;
-  font-size: 10px; font-weight: 600;
+  font-size: 12px; font-weight: var(--fw-strong);
   background: var(--surface-2); color: var(--text-2);
   border: 1px solid var(--border);
 }
@@ -243,15 +307,15 @@ h2 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s; }
 
 .stat { display: flex; flex-direction: column; gap: 4px; }
-.stat .n { font-size: 18px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
-.stat .l { font-size: 11px; color: var(--text-2); }
+.stat .n { font-size: 21px; font-weight: var(--fw-strong); letter-spacing: -.02em; line-height: 1.1; }
+.stat .l { font-size: 13px; color: var(--text-2); }
 
 /* -------------------------------------------------------------------- forms */
 
 input[type="text"], input[type="date"], input[type="number"],
 select, textarea {
   width: 100%;
-  min-height: 30px;
+  min-height: 32px;
   padding: 5px 9px;
   border: 1px solid var(--border-2);
   border-radius: var(--radius);
@@ -262,7 +326,7 @@ select, textarea {
 input:focus, select:focus, textarea:focus {
   outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent);
 }
-label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+label { display: block; font-weight: var(--fw-strong); font-size: 14px; margin-bottom: 4px; }
 .field { margin-bottom: 8px; }
 
 /* ------------------------------------------------------------------ segments */
@@ -272,7 +336,7 @@ label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
   border: none; background: none; font: inherit; cursor: pointer;
   padding: 5px 12px; border-radius: 5px; color: var(--text-2); font-weight: 500;
 }
-.segment button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+.segment button.on { background: var(--surface); color: var(--text); font-weight: var(--fw-strong); box-shadow: var(--shadow); }
 
 /* ------------------------------------------------------------------- banner */
 
@@ -280,16 +344,18 @@ label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
   display: flex; align-items: center; gap: 10px;
   padding: 7px 11px; border-radius: var(--radius);
   background: var(--accent-soft); border: 1px solid #BBD9F2;
-  color: var(--text); margin-bottom: 10px; font-size: 12px;
+  color: var(--text); margin-bottom: 10px; font-size: 14px;
 }
 @media (prefers-color-scheme: dark) { .banner { border-color: #1B4D77; } }
 
 /* -------------------------------------------------------------------- misc */
 
 .empty { text-align: center; padding: 24px 16px; color: var(--text-2); }
-.empty .big { font-size: 28px; margin-bottom: 6px; opacity: .5; }
+.empty .big { font-size: 32px; margin-bottom: 6px; opacity: .5; }
 .muted { color: var(--text-2); }
-.small { font-size: 13px; }
+/* Genuinely smaller than the body now. It used to be LARGER (13px against a 12px
+   base) — a drift nobody noticed, and the reason "small" text never looked small. */
+.small { font-size: 12px; }
 .right { margin-left: auto; }
 .flex { display: flex; align-items: center; gap: 10px; }
 .wrap { flex-wrap: wrap; }
@@ -297,7 +363,7 @@ label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 4px 7px; border-bottom: 1px solid var(--border); }
-th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); }
+th { font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); }
 tbody tr:hover { background: var(--surface-2); }
 
 /* -------------------------------------------------------------------- modal */

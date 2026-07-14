@@ -138,7 +138,12 @@ const Pages = (() => {
 
   function today(root) {
     const children = Store.children();
-    if (!todayChild || !Store.child(todayChild)) todayChild = children[0]?.id;
+
+    // On a child's own device there is nobody to pick: it is their day, always.
+    const locked = Device.childId();
+    if (locked) todayChild = locked;
+    else if (!todayChild || !Store.child(todayChild)) todayChild = children[0]?.id;
+
     if (!todayDate) todayDate = Store.today();
 
     const child = Store.child(todayChild);
@@ -160,9 +165,9 @@ const Pages = (() => {
           <h1>Today</h1>
           <div class="sub" style="margin-bottom:0">${esc(fmtDay(date))}${date === Store.today() ? '' : ' &middot; not today'}</div>
         </div>
-        <div class="segment" id="childPick">
+        ${locked ? '' : `<div class="segment" id="childPick">
           ${children.map(c => `<button data-c="${esc(c.id)}" class="${c.id === todayChild ? 'on' : ''}">${esc(c.name)}</button>`).join('')}
-        </div>
+        </div>`}
       </div>
 
       <div class="flex wrap" style="margin-bottom:8px">
@@ -181,7 +186,8 @@ const Pages = (() => {
       <div id="ahead"></div>
     `));
 
-    root.querySelector('#childPick').onclick = e => {
+    const pick = root.querySelector('#childPick');
+    if (pick) pick.onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
       todayChild = b.dataset.c; App.render();
     };
@@ -194,7 +200,7 @@ const Pages = (() => {
     renderHabitsFor(root.querySelector('#habitBlock'), todayChild, date);
 
     const rows = root.querySelector('#rows');
-    rows.appendChild(h(`<h2 style="margin:8px 0 4px;font-size:12px">Schoolwork</h2>`));
+    rows.appendChild(h(`<h2 style="margin:8px 0 4px;font-size:14px">Schoolwork</h2>`));
 
     if (!lessons.length) {
       rows.appendChild(h(`
@@ -235,7 +241,7 @@ const Pages = (() => {
     const card = h(`
       <div class="card" style="margin-top:8px;padding:6px 8px">
         <div class="flex" style="margin-bottom:4px">
-          <h2 style="margin:0;font-size:12px">Tasks &amp; deadlines</h2>
+          <h2 style="margin:0;font-size:14px">Tasks &amp; deadlines</h2>
           ${overdue ? `<span class="chip chip-high">${overdue} overdue</span>` : ''}
           <span class="chip">${mine.length} in the next week</span>
           <button class="btn btn-sm right" data-go="tasks">All tasks &rarr;</button>
@@ -256,7 +262,7 @@ const Pages = (() => {
             gap:8px; cursor:pointer; padding:4px 8px; border-radius:5px;
             border:1px solid ${late ? '#F5C6C2' : 'var(--border)'};
             background:${late ? 'rgba(196,43,28,.05)' : 'var(--surface)'};">
-          <span class="check" style="width:17px;height:17px;flex:0 0 17px;font-size:11px">&#10003;</span>
+          <span class="check" style="width:17px;height:17px;flex:0 0 17px;font-size:13px">&#10003;</span>
           <span style="flex:1;min-width:0">
             <span style="display:block;font-weight:500">${esc(t.title)}</span>
             ${t.description ? `<span class="small muted">${esc(t.description)}</span>` : ''}
@@ -300,6 +306,24 @@ const Pages = (() => {
     b.appendChild(h(`<div class="banner">&#8505;&#65039; <span>${esc(msg)}</span></div>`));
   }
 
+  /* ------------------------------------------------------------ one assignment
+
+     A single tickable line of work. It looks the same in the day's schoolwork as it
+     does in Work ahead, because it IS the same thing — so it is built in one place
+     and styled in one place (`.part` in app.css). Only what happens on the tick
+     differs, which is why that is the argument. */
+
+  function partLine(p, onTick) {
+    const line = h(`
+      <label class="part ${p.done ? 'done' : ''}">
+        <span class="check ${p.done ? 'on' : ''}">&#10003;</span>
+        <span class="part-text">${esc(p.text)}</span>
+      </label>`).firstElementChild;
+
+    line.onclick = e => { e.preventDefault(); onTick(); };
+    return line;
+  }
+
   /* ---------------------------------------------------------------- one lesson
 
      A day's assignment in one subject, with a checkbox per part: a reading, a
@@ -312,65 +336,56 @@ const Pages = (() => {
     const allDone = doneCount === parts.length && parts.length > 0;
     const started = doneCount > 0 && !allDone;
 
-    // Compact on purpose: the whole point of this page is seeing a child's day at a
-    // glance. Every extra pixel of padding is one fewer assignment on screen.
+    // The CARD stays compact — the whole point of this page is seeing a child's day at
+    // a glance, and every pixel of padding here is one fewer assignment on screen. The
+    // assignments INSIDE it do not: those are the things you read and tap. Tight frame,
+    // generous contents.
     const card = h(`
       <div class="row ${allDone ? 'is-done' : ''}"
-           style="align-items:stretch; padding:6px 9px; margin-bottom:4px; gap:8px">
+           style="align-items:stretch; padding:7px 9px; margin-bottom:6px; gap:8px">
         <div class="stripe" style="background:${esc(s.color)}"></div>
         <div class="row-main">
           <div class="flex wrap" style="gap:8px">
-            <span style="font-weight:600;font-size:13px;color:${esc(s.color)}">${esc(s.icon)} ${esc(s.name)}</span>
-            <span style="font-size:13px" class="muted">${esc(l.title)}</span>
+            <span style="font-weight:var(--fw-strong);font-size:16px;color:${esc(s.color)}">${esc(s.icon)} ${esc(s.name)}</span>
+            <span style="font-size:15px" class="muted">${esc(l.title)}</span>
             <span class="chip ${allDone ? 'chip-good' : (started ? 'chip-warn' : '')}"
-                  style="padding:1px 7px;font-size:11px">${doneCount}/${parts.length}</span>
-            ${l.priority === 'high' ? '<span class="chip chip-high" style="padding:1px 7px;font-size:11px">High</span>' : ''}
-            ${l.pinned ? '<span class="chip chip-info" style="padding:1px 7px;font-size:11px">&#128204; Fixed</span>' : ''}
+                  style="padding:1px 7px;font-size:13px">${doneCount}/${parts.length}</span>
+            ${l.priority === 'high' ? '<span class="chip chip-high" style="padding:1px 7px;font-size:13px">High</span>' : ''}
+            ${l.pinned ? '<span class="chip chip-info" style="padding:1px 7px;font-size:13px">&#128204; Fixed</span>' : ''}
           </div>
 
-          <div class="parts" style="margin-top:4px;display:flex;flex-direction:column;gap:3px"></div>
+          <div class="parts" style="margin-top:6px;display:flex;flex-direction:column;gap:5px"></div>
 
-          ${l.notes ? `<div class="small muted" style="margin-top:5px">${esc(l.notes)}</div>` : ''}
+          ${l.notes ? `<div class="small muted" style="margin-top:6px">${esc(l.notes)}</div>` : ''}
         </div>
 
-        <div class="row-actions" style="align-items:flex-start;gap:6px">
+        ${Device.isKid() ? '' : `<div class="row-actions" style="align-items:flex-start;gap:6px">
           <button class="btn btn-sm" data-act="move" ${allDone ? 'disabled' : ''}>Move &rarr;</button>
           <button class="btn btn-sm btn-icon" data-act="note" title="Notes">&#128221;</button>
-        </div>
+        </div>`}
       </div>
     `).firstElementChild;
 
     const wrap = card.querySelector('.parts');
 
-    parts.forEach(p => {
-      const line = h(`
-        <label class="flex" style="
-            gap:8px; cursor:pointer; padding:3px 7px; border-radius:5px; font-size:12px;
-            border:1px solid var(--border);
-            background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
-          <span class="check ${p.done ? 'on' : ''}"
-                style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:4px">&#10003;</span>
-          <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
-        </label>
-      `).firstElementChild;
+    parts.forEach(p => wrap.appendChild(partLine(p, () => {
+      Store.togglePart(l.id, p.id, date);
 
-      line.onclick = e => {
-        e.preventDefault();
-        Store.togglePart(l.id, p.id, date);
+      // Finishing work early pulls the rest of THIS subject up to fill the gap.
+      // Only this subject — the others are none of its business.
+      const moves = Scheduler.afterCompletion(l.curriculumId, Store.today());
+      App.render();
 
-        // Finishing work early pulls the rest of THIS subject up to fill the gap.
-        // Only this subject — the others are none of its business.
-        const moves = Scheduler.afterCompletion(l.curriculumId, Store.today());
-        App.render();
+      if (moves.length) {
+        setTimeout(() => banner(
+          `You're ahead in ${l.subject.name}. ${moves.length} lesson${moves.length === 1 ? '' : 's'} ` +
+          `moved earlier. Other subjects unchanged.`), 0);
+      }
+    })));
 
-        if (moves.length) {
-          setTimeout(() => banner(
-            `You're ahead in ${l.subject.name}. ${moves.length} lesson${moves.length === 1 ? '' : 's'} ` +
-            `moved earlier. Other subjects unchanged.`), 0);
-        }
-      };
-      wrap.appendChild(line);
-    });
+    // Not rendered on a kid device: moving a lesson reschedules a whole curriculum,
+    // which is emphatically not a child's decision to make.
+    if (Device.isKid()) return card;
 
     card.querySelector('[data-act="move"]').onclick = () => {
       const remaining = Store.remainingParts(l).length;
@@ -418,7 +433,7 @@ const Pages = (() => {
     const card = h(`
       <div class="card" style="margin-top:8px;padding:6px 8px">
         <div class="flex">
-          <h2 style="margin:0;font-size:12px">Work ahead</h2>
+          <h2 style="margin:0;font-size:14px">Work ahead</h2>
           <span class="chip">${upcoming.length} coming up</span>
           <button class="btn btn-sm right" id="toggle">${workAhead ? 'Hide' : 'Show'}</button>
         </div>
@@ -443,12 +458,12 @@ const Pages = (() => {
         <div style="padding:5px 0;border-top:1px solid var(--border)">
           <div class="flex wrap" style="margin-bottom:3px;gap:7px">
             <span style="width:10px;height:10px;border-radius:3px;background:${esc(s.color)}"></span>
-            <b style="color:${esc(s.color)};font-size:13px">${esc(s.name)}</b>
+            <b style="color:${esc(s.color)};font-size:15px">${esc(s.name)}</b>
             <span class="muted small">${esc(lesson.title)}</span>
-            ${doneCount ? `<span class="chip chip-warn" style="padding:1px 7px;font-size:11px">${doneCount}/${parts.length}</span>` : ''}
-            <span class="chip right" style="padding:1px 7px;font-size:11px">${esc(fmtShort(d2))}</span>
+            ${doneCount ? `<span class="chip chip-warn" style="padding:1px 7px;font-size:13px">${doneCount}/${parts.length}</span>` : ''}
+            <span class="chip right" style="padding:1px 7px;font-size:13px">${esc(fmtShort(d2))}</span>
           </div>
-          <div class="parts" style="display:flex;flex-direction:column;gap:4px"></div>
+          <div class="parts" style="display:flex;flex-direction:column;gap:5px"></div>
         </div>
       `).firstElementChild;
 
@@ -457,36 +472,22 @@ const Pages = (() => {
       // EVERY part, not just the unfinished ones. Rendering only what is left to do
       // means a part vanishes the instant it is ticked — so an accidental tap can
       // never be undone. Ticked ones stay put, struck through, and tap again to undo.
-      parts.forEach(p => {
-        const line = h(`
-          <label class="flex" style="
-              gap:8px; cursor:pointer; padding:3px 7px; border-radius:5px;
-              border:1px solid var(--border);
-              background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
-            <span class="check ${p.done ? 'on' : ''}"
-                  style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:4px">&#10003;</span>
-            <span class="small" style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
-          </label>`).firstElementChild;
+      parts.forEach(p => wrap.appendChild(partLine(p, () => {
+        // Recorded against the day it was ACTUALLY done, not the day it was planned
+        // for. The portfolio should say when the child really did the work.
+        const nowDone = Store.togglePart(lesson.id, p.id, Store.today());
 
-        line.onclick = e => {
-          e.preventDefault();
-          // Recorded against the day it was ACTUALLY done, not the day it was planned
-          // for. The portfolio should say when the child really did the work.
-          const nowDone = Store.togglePart(lesson.id, p.id, Store.today());
+        const moves = Scheduler.afterCompletion(lesson.curriculumId, Store.today());
+        App.render();
 
-          const moves = Scheduler.afterCompletion(lesson.curriculumId, Store.today());
-          App.render();
-
-          if (nowDone && moves.length) {
-            setTimeout(() => banner(
-              `Nice — you're ahead in ${s.name}. ${moves.length} lesson${moves.length === 1 ? '' : 's'} ` +
-              `moved earlier. Other subjects unchanged.`), 0);
-          } else if (!nowDone) {
-            setTimeout(() => banner(`Un-ticked "${p.text}". It is back on the schedule.`), 0);
-          }
-        };
-        wrap.appendChild(line);
-      });
+        if (nowDone && moves.length) {
+          setTimeout(() => banner(
+            `Nice — you're ahead in ${s.name}. ${moves.length} lesson${moves.length === 1 ? '' : 's'} ` +
+            `moved earlier. Other subjects unchanged.`), 0);
+        } else if (!nowDone) {
+          setTimeout(() => banner(`Un-ticked "${p.text}". It is back on the schedule.`), 0);
+        }
+      })));
 
       list.appendChild(block);
     });
@@ -513,7 +514,7 @@ const Pages = (() => {
     const card = h(`
       <div class="card" style="padding:6px 8px">
         <div class="flex" style="margin-bottom:4px">
-          <h2 style="margin:0;font-size:12px">Daily habits</h2>
+          <h2 style="margin:0;font-size:14px">Daily habits</h2>
           <span class="chip ${done === list.length ? 'chip-good' : ''}">${done}/${list.length}</span>
           <button class="btn btn-sm right" data-go="habits" style="min-height:28px;padding:2px 10px">Streaks &rarr;</button>
         </div>
@@ -533,19 +534,19 @@ const Pages = (() => {
 
       const btn = h(`
         <button class="btn" style="
-            min-height:28px; padding:3px 10px; gap:7px; font-size:12px; border-radius:16px;
+            min-height:28px; padding:3px 10px; gap:7px; font-size:14px; border-radius:16px;
             border-color:${on ? esc(hb.color) : 'var(--border-2)'};
             background:${on ? esc(hb.color) : 'var(--surface)'};
             color:${on ? '#fff' : 'var(--text)'};">
           <span style="
               width:16px;height:16px;flex:0 0 16px;border-radius:5px;display:grid;place-items:center;
-              font-size:11px;font-weight:700;pointer-events:none;
+              font-size:13px;font-weight:700;pointer-events:none;
               border:2px solid ${on ? '#fff' : 'var(--border-2)'};
               background:${on ? '#fff' : 'transparent'};
               color:${on ? esc(hb.color) : 'transparent'};">&#10003;</span>
           <span>${esc(hb.icon || '')} ${esc(hb.name)}</span>
           ${st.current > 0
-            ? `<span style="font-size:11px;opacity:.85;font-weight:600">&#128293;${st.current}</span>`
+            ? `<span style="font-size:13px;opacity:.85;font-weight:var(--fw-strong)">&#128293;${st.current}</span>`
             : ''}
         </button>
       `).firstElementChild;
@@ -565,8 +566,8 @@ const Pages = (() => {
         card.appendChild(h(`
           <div class="flex" style="margin-top:8px;padding:8px 10px;border-radius:8px;
                border:1px solid var(--border);background:var(--surface-2);gap:8px">
-            <span style="font-weight:600;font-size:13px;color:${esc(hb.color)}">${esc(hb.icon || '')} ${esc(hb.name)}</span>
-            <span class="chip chip-good" style="padding:1px 7px;font-size:11px">Plan complete &middot; ${prog.total} days</span>
+            <span style="font-weight:var(--fw-strong);font-size:15px;color:${esc(hb.color)}">${esc(hb.icon || '')} ${esc(hb.name)}</span>
+            <span class="chip chip-good" style="padding:1px 7px;font-size:13px">Plan complete &middot; ${prog.total} days</span>
           </div>`));
         return;
       }
@@ -580,12 +581,12 @@ const Pages = (() => {
              border:1px solid ${allDone ? esc(hb.color) : 'var(--border)'};
              background:var(--surface);">
           <div class="flex wrap" style="gap:6px;margin-bottom:4px">
-            <span style="font-weight:600;font-size:13px;color:${esc(hb.color)}">${esc(hb.icon || '')} ${esc(hb.name)}</span>
+            <span style="font-weight:var(--fw-strong);font-size:15px;color:${esc(hb.color)}">${esc(hb.icon || '')} ${esc(hb.name)}</span>
             <span class="muted small">${esc(entry.title)}</span>
             <span class="chip ${allDone ? 'chip-good' : (doneCount ? 'chip-warn' : '')}"
-                  style="padding:1px 7px;font-size:11px">${doneCount}/${parts.length}</span>
-            <span class="chip" style="padding:1px 7px;font-size:11px">Day ${prog.current > prog.total ? prog.total : prog.current} of ${prog.total}</span>
-            ${st.current > 0 ? `<span class="chip" style="padding:1px 7px;font-size:11px">&#128293;${st.current}</span>` : ''}
+                  style="padding:1px 7px;font-size:13px">${doneCount}/${parts.length}</span>
+            <span class="chip" style="padding:1px 7px;font-size:13px">Day ${prog.current > prog.total ? prog.total : prog.current} of ${prog.total}</span>
+            ${st.current > 0 ? `<span class="chip" style="padding:1px 7px;font-size:13px">&#128293;${st.current}</span>` : ''}
           </div>
           <div class="pl" style="display:flex;flex-wrap:wrap;gap:3px"></div>
         </div>
@@ -596,11 +597,11 @@ const Pages = (() => {
       parts.forEach(p => {
         const line = h(`
           <label class="flex" style="
-              gap:6px;cursor:pointer;padding:2px 8px;border-radius:12px;font-size:12px;
+              gap:6px;cursor:pointer;padding:2px 8px;border-radius:12px;font-size:14px;
               border:1px solid var(--border);
               background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
             <span class="check ${p.done ? 'on' : ''}"
-                  style="width:17px;height:17px;flex:0 0 17px;font-size:11px;border-radius:5px">&#10003;</span>
+                  style="width:17px;height:17px;flex:0 0 17px;font-size:13px;border-radius:5px">&#10003;</span>
             <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
           </label>`).firstElementChild;
 
@@ -624,7 +625,12 @@ const Pages = (() => {
 
   function habits(root) {
     const children = Store.children();
-    if (!habitChild || !Store.child(habitChild)) habitChild = children[0]?.id;
+
+    // A child's device shows their habits and only their habits. They can tick them;
+    // designing them is a parent's job, so the add/edit/plan controls go away too.
+    const locked = Device.childId();
+    if (locked) habitChild = locked;
+    else if (!habitChild || !Store.child(habitChild)) habitChild = children[0]?.id;
 
     const date = Store.today();
     const list = Store.habits().filter(x => x.childId === habitChild);
@@ -635,21 +641,24 @@ const Pages = (() => {
           <h1>Daily Habits</h1>
           <div class="sub">${esc(fmtDay(date))}</div>
         </div>
-        <div class="flex">
+        ${locked ? '' : `<div class="flex">
           <div class="segment" id="pick">
             ${children.map(c => `<button data-c="${esc(c.id)}" class="${c.id === habitChild ? 'on' : ''}">${esc(c.name)}</button>`).join('')}
           </div>
           <button class="btn btn-primary" id="addHabit">+ New habit</button>
-        </div>
+        </div>`}
       </div>
       <div id="rows"></div>
     `));
 
-    root.querySelector('#pick').onclick = e => {
+    const pick = root.querySelector('#pick');
+    if (pick) pick.onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
       habitChild = b.dataset.c; App.render();
     };
-    root.querySelector('#addHabit').onclick = () => editHabit(null, habitChild);
+
+    const add = root.querySelector('#addHabit');
+    if (add) add.onclick = () => editHabit(null, habitChild);
 
     const rows = root.querySelector('#rows');
 
@@ -685,7 +694,7 @@ const Pages = (() => {
             </div>
 
             ${planned && entry ? `<div style="margin-top:6px">
-                <div class="small" style="font-weight:600;margin-bottom:4px">${esc(entry.title)}</div>
+                <div class="small" style="font-weight:var(--fw-strong);margin-bottom:4px">${esc(entry.title)}</div>
                 <div class="pl" style="display:flex;flex-wrap:wrap;gap:4px"></div>
               </div>` : ''}
 
@@ -697,10 +706,10 @@ const Pages = (() => {
               ${hist.map(d => `<i class="${d.done ? 'done' : (d.due ? 'miss' : '')}" title="${d.date}"></i>`).join('')}
             </div>
           </div>
-          <div class="row-actions" style="align-items:flex-start">
+          ${locked ? '' : `<div class="row-actions" style="align-items:flex-start">
             <button class="btn btn-sm" data-act="plan">${planned ? '📋 Daily plan' : '📋 Add daily plan'}</button>
             <button class="btn btn-sm" data-act="edit">Edit</button>
-          </div>
+          </div>`}
         </div>
       `).firstElementChild;
 
@@ -719,11 +728,11 @@ const Pages = (() => {
         (entry.parts || []).forEach(p => {
           const line = h(`
             <label class="flex" style="
-                gap:6px;cursor:pointer;padding:2px 8px;border-radius:12px;font-size:11px;
+                gap:6px;cursor:pointer;padding:2px 8px;border-radius:12px;font-size:13px;
                 border:1px solid var(--border);
                 background:${p.done ? 'var(--surface-2)' : 'var(--surface)'};">
               <span class="check ${p.done ? 'on' : ''}"
-                    style="width:15px;height:15px;flex:0 0 15px;font-size:10px;border-radius:4px">&#10003;</span>
+                    style="width:15px;height:15px;flex:0 0 15px;font-size:12px;border-radius:4px">&#10003;</span>
               <span style="${p.done ? 'text-decoration:line-through;opacity:.55' : ''}">${esc(p.text)}</span>
             </label>`).firstElementChild;
 
@@ -736,8 +745,10 @@ const Pages = (() => {
         });
       }
 
-      row.querySelector('[data-act="edit"]').onclick = () => editHabit(hb, habitChild);
-      row.querySelector('[data-act="plan"]').onclick = () => planDialog(hb);
+      if (!locked) {
+        row.querySelector('[data-act="edit"]').onclick = () => editHabit(hb, habitChild);
+        row.querySelector('[data-act="plan"]').onclick = () => planDialog(hb);
+      }
 
       rows.appendChild(row);
     });
@@ -773,13 +784,13 @@ const Pages = (() => {
                 ${e.done ? 'opacity:.55' : ''}">
               <span class="muted small" style="width:22px">${e.seq}</span>
               <span style="flex:1;min-width:0">
-                <span style="font-weight:600;font-size:13px">${esc(e.title)}</span>
+                <span style="font-weight:var(--fw-strong);font-size:15px">${esc(e.title)}</span>
                 <span class="small muted" style="display:block">${(e.parts || []).map(p => esc(p.text)).join(' · ')}</span>
               </span>
               ${e.done
-                ? '<span class="chip chip-good" style="padding:1px 7px;font-size:11px">Done</span>'
+                ? '<span class="chip chip-good" style="padding:1px 7px;font-size:13px">Done</span>'
                 : `<button type="button" class="btn btn-sm btn-danger delDay" data-e="${esc(e.id)}"
-                     style="min-height:26px;padding:1px 8px;font-size:12px" title="Delete this day">&times;</button>`}
+                     style="min-height:26px;padding:1px 8px;font-size:14px" title="Delete this day">&times;</button>`}
             </div>`).join('')}
         </div>
       </div>` : '';
@@ -958,7 +969,7 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
             <button class="btn btn-sm btn-icon" data-down ${idx === subs.length - 1 ? 'disabled' : ''} title="Move down">&darr;</button>
           </td>
           <td>
-            <span style="font-size:20px">${esc(s.icon || '')}</span>
+            <span style="font-size:23px">${esc(s.icon || '')}</span>
             <b style="color:${esc(s.color)};margin-left:6px">${esc(s.name)}</b>
             ${s.archived ? '<span class="chip chip-warn" style="margin-left:8px">Archived</span>' : ''}
             ${dayLabel(s)}
@@ -1020,13 +1031,13 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
             border:1px solid var(--border-2); border-radius:8px; background:var(--surface-2)">
           ${ICONS.map(ic => `
             <button type="button" class="icon-opt" data-ic="${ic}" style="
-              font-size:20px; line-height:1; padding:6px 0; cursor:pointer;
+              font-size:23px; line-height:1; padding:6px 0; cursor:pointer;
               border-radius:6px; border:2px solid ${ic === current ? 'var(--accent)' : 'transparent'};
               background:${ic === current ? 'var(--accent-soft)' : 'transparent'};">${ic}</button>`).join('')}
         </div>
         <div class="flex" style="margin-top:8px">
           <span class="small muted">Selected:</span>
-          <span id="iconPreview" style="font-size:22px">${esc(current || '📘')}</span>
+          <span id="iconPreview" style="font-size:25px">${esc(current || '📘')}</span>
           <input type="text" id="i" value="${esc(current || '📘')}" maxlength="4"
                  style="max-width:90px;text-align:center" title="Or type/paste any character">
         </div>
@@ -1431,8 +1442,37 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       </div>
 
       <div class="card">
+        <h2>Text</h2>
+        <div class="sub" style="margin-bottom:10px">
+          Changes the whole app. Spacing stays tight either way &mdash; this makes the words
+          bigger and heavier, not the gaps.
+        </div>
+        <div class="flex wrap" style="gap:18px;align-items:flex-start">
+          <div>
+            <label>Typeface</label>
+            <div class="segment" id="fontPick">
+              <button data-f="verdana" class="${(Store.settings.font || 'verdana') === 'verdana' ? 'on' : ''}">Easier to read</button>
+              <button data-f="system"  class="${Store.settings.font === 'system' ? 'on' : ''}">Standard</button>
+            </div>
+          </div>
+          <div>
+            <label>Weight</label>
+            <div class="segment" id="boldPick">
+              <button data-b="1" class="${Store.settings.bold !== false ? 'on' : ''}">Bold</button>
+              <button data-b="0" class="${Store.settings.bold === false ? 'on' : ''}">Normal</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>Sync between computers</h2>
         <div id="syncBox"></div>
+      </div>
+
+      <div class="card">
+        <h2>This device</h2>
+        <div id="deviceBox"></div>
       </div>
 
       <div class="card">
@@ -1453,10 +1493,19 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     `));
 
     renderSync(root.querySelector('#syncBox'));
+    renderDevice(root.querySelector('#deviceBox'));
 
     root.querySelector('#mode').onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
       Store.settings.mode = b.dataset.m; Store.save(); App.render();
+    };
+    root.querySelector('#fontPick').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      Store.settings.font = b.dataset.f; Store.save(); App.render();
+    };
+    root.querySelector('#boldPick').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      Store.settings.bold = b.dataset.b === '1'; Store.save(); App.render();
     };
     root.querySelector('#yr').onchange = e => {
       Store.settings.schoolYear = e.target.value; Store.save();
@@ -1486,6 +1535,65 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     };
   }
 
+  /* ---------------------------------------------------------------- device UI
+
+     Handing a tablet to a child. The mode is stored on the device, not in the synced
+     document — see device.js for why. */
+
+  function renderDevice(mount) {
+    const children = Store.children();
+    const cur = Device.childId();
+
+    mount.appendChild(h(`
+      <div class="sub" style="margin-bottom:10px">
+        Hand this computer or tablet to a child and it becomes <b>theirs</b>: Today and Habits for
+        them alone, nothing else to wander into. What they tick syncs back to you like any other
+        computer. This is a setting on <b>this device only</b> — it is not shared with the others.
+      </div>
+
+      <div class="segment" id="whose" style="margin-bottom:12px">
+        <button data-c="" class="${cur ? '' : 'on'}">Parent — whole app</button>
+        ${children.map(c => `<button data-c="${esc(c.id)}" class="${c.id === cur ? 'on' : ''}">${esc(c.name)}</button>`).join('')}
+      </div>
+
+      <div class="field" style="max-width:240px">
+        <label>Parent PIN ${Device.hasPin() ? '' : '<span class="small muted">— none set</span>'}</label>
+        <input type="text" inputmode="numeric" id="pin"
+               value="${esc(Store.settings.parentPin || '')}" placeholder="e.g. 4821">
+        <div class="small muted" style="margin-top:4px">
+          Asked for when leaving a child's device. Blank means no PIN. It is a speed bump, not a
+          lock: it keeps a nine-year-old out of Settings, and it is not pretending to do more.
+        </div>
+      </div>
+
+      ${Sync.isOn() ? `<div class="banner" style="display:block;margin-top:12px">
+        <b>Before you hand it over.</b> A child's device syncs using an access token just like
+        yours, so it can write to your family data. Give each child's device <b>its own token</b>:
+        then if a tablet is lost, or you simply change your mind, you can revoke that one token on
+        GitHub and nothing else in the house is disturbed.
+      </div>` : ''}
+    `));
+
+    mount.querySelector('#whose').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+
+      const id = b.dataset.c;
+      if (!id) { Device.setParent(); App.render(); return; }
+
+      const c = Store.child(id);
+      if (!confirm(
+        `Make this device ${c.name}'s?\n\n` +
+        `It will show only ${c.name}'s Today and Habits. To come back, use the "Parent" ` +
+        `button at the bottom of the sidebar.`)) return;
+
+      Device.setKid(id);
+      App.render();
+    };
+
+    // On change, not on every keystroke — a half-typed PIN is not a PIN.
+    mount.querySelector('#pin').onchange = e => { Device.setPin(e.target.value); };
+  }
+
   /* ------------------------------------------------------------------ sync UI */
 
   function renderSync(mount) {
@@ -1508,7 +1616,7 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
           </div>
 
           <details style="margin-bottom:12px">
-            <summary style="cursor:pointer;font-weight:600">Step-by-step setup (about 3 minutes)</summary>
+            <summary style="cursor:pointer;font-weight:var(--fw-strong)">Step-by-step setup (about 3 minutes)</summary>
             <ol style="margin:10px 0 0 18px;line-height:1.7">
               <li>Go to <b>github.com/new</b>. Name the repository <code>family-data</code>,
                   choose <b>Private</b>, tick <b>Add a README</b>, and click Create.</li>

@@ -33,13 +33,13 @@ vm.createContext(sandbox);
 // plain <script> tags, and a trailing line hands the modules back to us.
 const read = f => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8');
 
-const bundle = ['seed.js', 'store.js', 'scheduler.js', 'habits.js', 'import.js', 'sync.js']
+const bundle = ['seed.js', 'store.js', 'scheduler.js', 'habits.js', 'import.js', 'sync.js', 'device.js']
   .map(read).join('\n;\n')
-  + '\n;globalThis.__exports = { Store, Scheduler, Habits, Seed, Importer, Sync };';
+  + '\n;globalThis.__exports = { Store, Scheduler, Habits, Seed, Importer, Sync, Device };';
 
 vm.runInContext(bundle, sandbox, { filename: 'app-bundle.js' });
 
-const { Store, Scheduler, Habits, Importer, Sync } = sandbox.__exports;
+const { Store, Scheduler, Habits, Importer, Sync, Device } = sandbox.__exports;
 
 /* ---------------------------------------------------------------- test harness */
 let pass = 0, fail = 0;
@@ -982,6 +982,86 @@ test('the settings blob follows the most recently touched document', () => {
 
   eq(Sync.merge(older, newer).settings.mode, 'Vacation');
   eq(Sync.merge(newer, older).settings.mode, 'Vacation');
+});
+
+/* ========================================================== KID-MODE DEVICES
+
+   The thing worth protecting here is the way OUT. A device stuck in a mode it
+   cannot leave is a device Linda has to fix by clearing browser storage by hand,
+   and she should never have to do that. So every one of these asks the same
+   question: when something is wrong, does it fail OPEN? */
+
+console.log('\nDevices (parent / kid mode)');
+
+test('a fresh device is a parent device — the whole app, as before', () => {
+  build([MON]);
+  Device.setParent();
+  eq(Device.isKid(), false);
+  eq(Device.childId(), null);
+});
+
+test('handing the device to a child pins it to that child', () => {
+  const { child } = build([MON]);
+  Device.setKid(child.id);
+  ok(Device.isKid(), 'it is a kid device');
+  eq(Device.childId(), child.id);
+  eq(Device.child().name, 'Amaru');
+});
+
+test('the mode survives a reload — it is written to the device, not just held in memory', () => {
+  const { child } = build([MON]);
+  Device.setKid(child.id);
+  Device.__reload();                       // as if the browser had been closed and reopened
+  eq(Device.childId(), child.id);
+});
+
+test('a kid device whose child no longer exists falls back to parent, not a dead end', () => {
+  build([MON]);
+  Device.setKid('a-child-who-was-deleted-on-the-other-computer');
+  Device.__reload();
+  eq(Device.childId(), null, 'it did not strand itself on a missing child');
+  eq(Device.isKid(), false, 'and it let itself back into the full app');
+});
+
+test('a corrupt stored value fails open to parent rather than locking the app', () => {
+  build([MON]);
+  memory['familyDashboard.device.v1'] = '{ this is not json';
+  Device.__reload();
+  eq(Device.isKid(), false);
+});
+
+test('the device mode is never written into the synced document', () => {
+  const { child } = build([MON]);
+  Device.setKid(child.id);
+  const doc = JSON.stringify(Store.raw);
+  ok(!/"mode"\s*:\s*"kid"/.test(doc), 'kid mode did not leak into the file we commit');
+  ok(!doc.includes('familyDashboard.device'), 'nor did the device key');
+});
+
+test('with no PIN set, anyone can leave a kid device', () => {
+  build([MON]);
+  Device.setPin('');
+  eq(Device.hasPin(), false);
+  ok(Device.checkPin(''), 'no PIN means the gate is simply open');
+  ok(Device.checkPin('anything'));
+});
+
+test('with a PIN set, only the right PIN gets out', () => {
+  build([MON]);
+  Device.setPin('4821');
+  ok(Device.hasPin());
+  ok(Device.checkPin('4821'));
+  ok(Device.checkPin(' 4821 '), 'stray spaces from a tablet keyboard still count');
+  ok(!Device.checkPin('4822'));
+  ok(!Device.checkPin(''));
+});
+
+test('clearing the PIN turns the gate off again', () => {
+  build([MON]);
+  Device.setPin('4821');
+  Device.setPin('');
+  eq(Device.hasPin(), false);
+  ok(Device.checkPin('whatever'));
 });
 
 /* ==================================================================== report */

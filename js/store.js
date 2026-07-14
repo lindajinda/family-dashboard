@@ -78,7 +78,9 @@ const Store = (() => {
       settings: {
         mode: 'School Year',           // Summer | School Year | Vacation | Custom
         schoolYear: '2026-2027',
-        accent: '#0F6CBD'
+        accent: '#0F6CBD',
+        font: 'verdana',               // verdana (easier to read) | system
+        bold: true                     // Settings → Text; see app.js applyText()
       },
       children: [],
       subjects: [],

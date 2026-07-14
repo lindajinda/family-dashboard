@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.3.0] - 2026-07-13
+
+### Changed
+- **A heavier, more legible typeface, and a switch for it.** The app now uses Verdana at a
+  semibold weight by default — drawn for screens, with a tall x-height and wide open letters.
+  **Settings → Text** switches typeface (Easier to read / Standard) and weight (Bold / Normal),
+  so this is dial-able rather than a decision made once on someone's behalf.
+- Only fonts already on the machine are used — never a downloaded one. A web font would stop
+  the app looking right the moment it is opened offline or straight from the file, and it is
+  one more thing that can rot.
+- Bold does not flatten the page: body weight and "stands out from the body" weight move
+  together (`--fw` / `--fw-strong`), so headings and subject names stay a step above the text
+  around them at every setting.
+- **Bigger type everywhere, same tight spacing.** The base font went from 12px to 14px and
+  every size in the app moved up with it — nothing is below 12px now. Padding, margins and
+  gaps were deliberately left exactly as they were, so pages did not get taller: you still
+  see the same day at a glance, just without squinting.
+- Assignments on the Today page are now the largest, plainest thing on screen — 16px text, a
+  24px tick box, and the whole row is the tap target. The day's schoolwork and "Work ahead"
+  had each hand-rolled this same row with their own copy of the styling, which is how they
+  had drifted apart; they are now one shared `.part` control.
+- Fixed a long-standing drift: `.small` was 13px against a 12px base — *larger* than the body
+  text it was meant to shrink. It is now genuinely small.
+
+### Added
+- **Kid Mode.** Settings → This device hands a computer or tablet to one child. It then
+  shows only Today and Habits, for them alone: no Curriculum, no Settings, no rescheduling,
+  no adding habits. They tick their work and it syncs back like any other computer. A
+  **🔒 Parent** button in the sidebar leaves again, behind an optional PIN.
+- The device's identity is stored **on the device**, never in the synced file — the tablet is
+  Keanu's on every computer, and putting that in the shared document would only mean three
+  machines fighting over one field.
+- **[docs/SHARING.md](docs/SHARING.md)** — how to give another adult full access (invite them
+  to the `family-data` repo; they make their own token), how to set up a child's device, and
+  how to take access away again.
+- 9 more tests (85 total), all about failing *open*: a corrupt or stale device setting must
+  never strand a device in a mode it cannot leave.
+
+### Note
+Sharing with another adult needed no new code at all. The sync engine already merges edits
+from two computers, and a second person turns out to be exactly the same problem.
+
+The PIN is a speed bump, not a lock. It keeps a nine-year-old out of Settings; it would not
+stop a determined teenager with the developer tools open, and it does not pretend to.
+
 ## [0.2.0] - 2026-07-12
 
 ### Added
