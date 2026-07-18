@@ -14,6 +14,78 @@ const Pages = (() => {
   const fmtShort = key => Store.fromKey(key).toLocaleDateString(undefined,
     { weekday: 'short', day: 'numeric', month: 'short' });
 
+  /* The list of topics a task can be filed under. Curriculum subjects come first —
+     they ARE the curriculum topics — followed by any ad-hoc topic already typed on
+     another task, so a one-off topic like "Admin" only has to be invented once. The
+     field is a free-text datalist, so anything new is created just by typing it. */
+  function topicList() {
+    const subjects = Store.subjects().map(s => s.name);
+    const used = Store.tasks().map(t => t.category).filter(Boolean);
+    return [...new Set([...subjects, ...used])].sort((a, b) => a.localeCompare(b));
+  }
+
+  /** A chip for a task's topic, borrowing the matching subject's colour and icon. */
+  function topicChip(cat) {
+    if (!cat) return '';
+    const subj = Store.allSubjects().find(s => s.name === cat);
+    const color = subj ? subj.color : '#8A8A8A';
+    const icon = subj && subj.icon ? esc(subj.icon) + ' ' : '';
+    return `<span class="chip" style="color:${esc(color)};border-color:${esc(color)}">${icon}${esc(cat)}</span>`;
+  }
+
+  /* Recurring tasks. A task can repeat on a fixed cadence until an optional end
+     date. Unlike a habit (a daily thing with a streak), this is for the looser,
+     longer rhythms — a monthly payment, a weekly lesson, an annual renewal. */
+
+  const REPEAT_LABEL = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' };
+  const isRecurring = t => t.repeat && t.repeat !== 'none';
+
+  function repeatChip(t) {
+    const label = REPEAT_LABEL[t && t.repeat];
+    if (!label) return '';
+    const until = t.repeatUntil ? ` &middot; until ${esc(fmtShort(t.repeatUntil))}` : '';
+    return `<span class="chip chip-info">🔁 ${label}${until}</span>`;
+  }
+
+  /** The next due date for a recurring task, anchored to its due date when that is
+   *  still ahead (so completing early keeps the cadence) and to today otherwise. */
+  function nextTaskDue(t) {
+    const today = Store.today();
+    const base = (t.due && t.due > today) ? t.due : today;
+    const d = Store.fromKey(base);
+    switch (t.repeat) {
+      case 'daily':   return Store.addDays(base, 1);
+      case 'weekly':  return Store.addDays(base, 7);
+      case 'monthly': d.setMonth(d.getMonth() + 1);       return Store.toKey(d);
+      case 'yearly':  d.setFullYear(d.getFullYear() + 1); return Store.toKey(d);
+      default:        return t.due || null;
+    }
+  }
+
+  /** Tick the task's current occurrence — always logged to the portfolio. A
+   *  recurring task rolls forward to its next date rather than being finished,
+   *  unless that next date passes its end date, which completes the series. */
+  function completeTaskOccurrence(t) {
+    const child = Store.child(t.childId);
+    Store.recordCompletion({
+      kind: 'task', childId: t.childId,
+      childName: child ? child.name : 'Family',
+      title: t.title, category: 'One-time task',
+      subjectName: t.category || '', date: Store.today(), minutes: 0
+    });
+
+    if (isRecurring(t)) {
+      const next = nextTaskDue(t);
+      if (t.repeatUntil && next && next > t.repeatUntil) {
+        Store.update('tasks', t.id, { done: true });          // reached the end date
+      } else {
+        Store.update('tasks', t.id, { due: next, done: false });
+      }
+    } else {
+      Store.update('tasks', t.id, { done: true });
+    }
+  }
+
   /* ============================================================== DASHBOARD */
 
   function dashboard(root) {
@@ -181,8 +253,8 @@ const Pages = (() => {
       </div>
       <div id="banner"></div>
       <div id="habitBlock"></div>
-      <div id="rows"></div>
       <div id="taskBlock"></div>
+      <div id="rows"></div>
       <div id="ahead"></div>
     `));
 
@@ -231,19 +303,22 @@ const Pages = (() => {
     const mine = Store.tasks()
       .filter(t => !t.done)
       .filter(t => t.childId === childId || !t.childId)   // theirs, plus family tasks
-      .filter(t => t.due && t.due <= horizon)
-      .sort((a, b) => a.due.localeCompare(b.due));
+      // Anything due within the week, PLUS anything with no due date at all: an
+      // open-ended to-do ("read to Ender each night") has no deadline but still
+      // needs doing, so it stays on Today until it is ticked off.
+      .filter(t => !t.due || t.due <= horizon)
+      .sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));  // undated last
 
     if (!mine.length) return;
 
-    const overdue = mine.filter(t => t.due < date).length;
+    const overdue = mine.filter(t => t.due && t.due < date).length;
 
     const card = h(`
       <div class="card" style="margin-top:8px;padding:6px 8px">
         <div class="flex" style="margin-bottom:4px">
           <h2 style="margin:0;font-size:14px">Tasks &amp; deadlines</h2>
           ${overdue ? `<span class="chip chip-high">${overdue} overdue</span>` : ''}
-          <span class="chip">${mine.length} in the next week</span>
+          <span class="chip">${mine.length} to do</span>
           <button class="btn btn-sm right" data-go="tasks">All tasks &rarr;</button>
         </div>
         <div id="tl" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -253,7 +328,7 @@ const Pages = (() => {
     const list = card.querySelector('#tl');
 
     mine.forEach(t => {
-      const late = t.due < date;
+      const late = t.due && t.due < date;
       const isToday = t.due === date;
       const family = !t.childId;
 
@@ -268,28 +343,20 @@ const Pages = (() => {
             ${t.description ? `<span class="small muted">${esc(t.description)}</span>` : ''}
           </span>
           ${family ? '<span class="chip">Family</span>' : ''}
+          ${topicChip(t.category)}
+          ${repeatChip(t)}
           ${t.priority === 'high' ? '<span class="chip chip-high">High</span>' : ''}
-          <span class="chip ${late ? 'chip-high' : (isToday ? 'chip-warn' : '')}">
-            ${late ? 'Overdue &middot; ' : (isToday ? 'Today' : '')}${isToday ? '' : esc(fmtShort(t.due))}
-          </span>
+          ${t.due
+            ? `<span class="chip ${late ? 'chip-high' : (isToday ? 'chip-warn' : '')}">
+                 ${late ? 'Overdue &middot; ' : (isToday ? 'Today' : '')}${isToday ? '' : esc(fmtShort(t.due))}
+               </span>`
+            : '<span class="chip">No due date</span>'}
         </label>
       `).firstElementChild;
 
       row.onclick = e => {
         e.preventDefault();
-        Store.update('tasks', t.id, { done: true });
-
-        const c = Store.child(t.childId);
-        Store.recordCompletion({
-          kind: 'task',
-          childId: t.childId,
-          childName: c ? c.name : 'Family',
-          title: t.title,
-          category: 'One-time task',
-          date: Store.today(),
-          minutes: 0
-        });
-
+        completeTaskOccurrence(t);
         App.render();
       };
 
@@ -1158,23 +1225,49 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
 
   /* ================================================================== TASKS */
 
+  // Which slice of the task list is shown. Survives a redraw, like the other
+  // filter state on this file. 'all' | 'family' (nobody in particular) | a childId.
+  let taskFilter = 'all';
+
   function tasks(root) {
-    const list = Store.tasks().sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
     const today = Store.today();
+    const children = Store.children();
+
+    // A filter pinned to a child who was since deleted falls back to All.
+    if (taskFilter !== 'all' && taskFilter !== 'family' && !Store.child(taskFilter)) taskFilter = 'all';
+
+    const all = Store.tasks().sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+    const list = all.filter(t =>
+      taskFilter === 'all'    ? true :
+      taskFilter === 'family' ? !t.childId :
+                                t.childId === taskFilter);
 
     root.appendChild(h(`
       <div class="page-head">
         <div><h1>One-Time Tasks</h1><div class="sub">Appointments, forms, purchases, events</div></div>
         <button class="btn btn-primary" id="add">+ New task</button>
       </div>
+      <div class="segment" id="taskFilter" style="margin-bottom:12px;flex-wrap:wrap">
+        <button data-f="all" class="${taskFilter === 'all' ? 'on' : ''}">All</button>
+        ${children.map(c => `<button data-f="${esc(c.id)}" class="${taskFilter === c.id ? 'on' : ''}">${esc(c.name)}</button>`).join('')}
+        <button data-f="family" class="${taskFilter === 'family' ? 'on' : ''}">Family</button>
+      </div>
       <div id="rows"></div>
     `));
 
     root.querySelector('#add').onclick = () => editTask(null);
+    root.querySelector('#taskFilter').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      taskFilter = b.dataset.f; App.render();
+    };
     const rows = root.querySelector('#rows');
 
     if (!list.length) {
-      rows.appendChild(h(`<div class="card empty"><div class="big">📋</div><div>No tasks yet.</div></div>`));
+      const msg = !all.length          ? 'No tasks yet.'
+        : taskFilter === 'family'      ? 'No family tasks — every task is assigned to a child.'
+        : taskFilter === 'all'         ? 'No tasks yet.'
+        : `No tasks for ${esc(Store.child(taskFilter)?.name || 'this child')}.`;
+      rows.appendChild(h(`<div class="card empty"><div class="big">📋</div><div>${msg}</div></div>`));
       return;
     }
 
@@ -1190,6 +1283,8 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
             <div class="row-meta">
               <span class="row-subject">${esc(t.title)}</span>
               ${child ? `<span class="chip">${esc(child.name)}</span>` : '<span class="chip">Family</span>'}
+              ${topicChip(t.category)}
+              ${repeatChip(t)}
               ${t.priority === 'high' ? '<span class="chip chip-high">High</span>' : ''}
               ${t.due ? `<span class="chip ${late ? 'chip-high' : 'chip-warn'}">${esc(fmtShort(t.due))}${late ? ' · overdue' : ''}</span>` : ''}
             </div>
@@ -1200,15 +1295,10 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       `).firstElementChild;
 
       row.querySelector('.check').onclick = () => {
-        const next = !t.done;
-        Store.update('tasks', t.id, { done: next });
-        if (next) {
-          Store.recordCompletion({
-            kind: 'task', childId: t.childId,
-            childName: child ? child.name : 'Family',
-            title: t.title, category: 'One-time task', date: today, minutes: 0
-          });
-        }
+        // A recurring task never "un-ticks": ticking it logs the occurrence and rolls
+        // it forward. A plain task toggles, so an accidental tick can be undone.
+        if (!isRecurring(t) && t.done) Store.update('tasks', t.id, { done: false });
+        else completeTaskOccurrence(t);
         App.render();
       };
       row.querySelector('[data-e]').onclick = () => editTask(t);
@@ -1227,7 +1317,24 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
           ${children.map(c => `<option value="${esc(c.id)}" ${t && t.childId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
         </select>
       </div>
+      <div class="field"><label>Topic</label>
+        <input type="text" id="cat" list="topicOptions" value="${esc(t ? (t.category || '') : '')}" placeholder="Pick a curriculum topic, or type a new one">
+        <datalist id="topicOptions">
+          ${topicList().map(n => `<option value="${esc(n)}"></option>`).join('')}
+        </datalist>
+        <div class="small muted" style="margin-top:4px">Choose a subject, or type any new topic to create it.</div>
+      </div>
       <div class="field"><label>Due date</label><input type="date" id="u" value="${esc(t ? t.due : '')}"></div>
+      <div class="field"><label>Repeat</label>
+        <select id="rep">
+          ${[['none', 'Does not repeat'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly'], ['yearly', 'Yearly']]
+            .map(([v, l]) => `<option value="${v}" ${(t && t.repeat || 'none') === v ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" id="endsField">
+        <label>Repeat until <span class="small muted">(optional — leave blank to repeat forever)</span></label>
+        <input type="date" id="until" value="${esc(t ? (t.repeatUntil || '') : '')}">
+      </div>
       <div class="field"><label>Priority</label>
         <select id="p">
           <option value="normal" ${t && t.priority === 'normal' ? 'selected' : ''}>Normal</option>
@@ -1236,17 +1343,28 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       </div>
       ${t ? '<button class="btn btn-danger btn-sm" id="del">Delete task</button>' : ''}
     `, () => {
+      const repeat = document.querySelector('#rep').value;
       const rec = {
         title: document.querySelector('#t').value.trim() || 'Untitled',
         description: document.querySelector('#d').value,
         childId: document.querySelector('#c').value || null,
+        category: document.querySelector('#cat').value.trim() || null,
         due: document.querySelector('#u').value || null,
+        repeat,
+        repeatUntil: repeat === 'none' ? null : (document.querySelector('#until').value || null),
         priority: document.querySelector('#p').value
       };
       if (t) Store.update('tasks', t.id, rec);
       else Store.add('tasks', Object.assign({ done: false, notes: '' }, rec));
       App.render();
     }, () => {
+      // The end-date field only makes sense once a cadence is chosen.
+      const rep = document.querySelector('#rep');
+      const ends = document.querySelector('#endsField');
+      const syncEnds = () => { ends.style.display = rep.value === 'none' ? 'none' : ''; };
+      rep.onchange = syncEnds;
+      syncEnds();
+
       const d = document.querySelector('#del');
       if (d) d.onclick = () => { Store.remove('tasks', t.id); Modal.close(); App.render(); };
     });
