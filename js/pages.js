@@ -1029,9 +1029,7 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     const tb = root.querySelector('#tb');
     subs.forEach((s, idx) => {
       const assigned = children.filter(c => Store.curriculumFor(c.id, s.id));
-      const lessonCount = Store.curricula()
-        .filter(c => c.subjectId === s.id)
-        .reduce((n, c) => n + Store.sequence(c.id).length, 0);
+      const lessonCount = subjectLessonCount(s);
 
       const tr = h(`
         <tr style="${s.archived ? 'opacity:.5' : ''}">
@@ -1588,8 +1586,20 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
          + (Store.portfolio() || []).filter(p => p.childId === id).length;
   }
 
-  const isEmptyChild   = c => childItemCount(c.id) === 0;
-  const isEmptySubject = s => !Store.curricula().some(c => c.subjectId === s.id);
+  const isEmptyChild = c => childItemCount(c.id) === 0;
+
+  /* Lessons a subject actually shows: only those belonging to a CURRENT child.
+     Orphan curricula left by a deleted child appear nowhere in the UI, so they must
+     not be counted here either — otherwise the Lessons column and "empty duplicate"
+     would disagree, and deleting lessons on the Curriculum page would never seem to
+     move the Subjects number. */
+  function subjectLessonCount(s) {
+    const liveIds = new Set(Store.children().map(c => c.id));
+    return Store.curricula()
+      .filter(c => c.subjectId === s.id && liveIds.has(c.childId))
+      .reduce((n, c) => n + Store.sequence(c.id).length, 0);
+  }
+  const isEmptySubject = s => subjectLessonCount(s) === 0;
 
   /* Undo the seed-duplication mess: every fresh browser seeded its own copy of each
      child and subject, and old syncs merged them. This soft-deletes only the copies
