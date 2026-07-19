@@ -238,7 +238,7 @@ const Pages = (() => {
           <div class="sub" style="margin-bottom:0">${esc(fmtDay(date))}${date === Store.today() ? '' : ' &middot; not today'}</div>
         </div>
         ${locked ? '' : `<div class="segment" id="childPick">
-          ${children.map(c => `<button data-c="${esc(c.id)}" class="${c.id === todayChild ? 'on' : ''}">${esc(c.name)}</button>`).join('')}
+          ${children.map(c => `<button data-c="${esc(c.id)}" class="${c.id === todayChild ? 'on' : ''}"><span class="seg-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}
         </div>`}
       </div>
 
@@ -1249,7 +1249,7 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
       </div>
       <div class="segment" id="taskFilter" style="margin-bottom:12px;flex-wrap:wrap">
         <button data-f="all" class="${taskFilter === 'all' ? 'on' : ''}">All</button>
-        ${children.map(c => `<button data-f="${esc(c.id)}" class="${taskFilter === c.id ? 'on' : ''}">${esc(c.name)}</button>`).join('')}
+        ${children.map(c => `<button data-f="${esc(c.id)}" class="${taskFilter === c.id ? 'on' : ''}"><span class="seg-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}
         <button data-f="family" class="${taskFilter === 'family' ? 'on' : ''}">Family</button>
       </div>
       <div id="rows"></div>
