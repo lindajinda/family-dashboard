@@ -1012,7 +1012,10 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
           <h1>Subjects</h1>
           <div class="sub">Nothing here is fixed. Add, rename, recolour, reorder, archive — no code changes ever needed.</div>
         </div>
-        <button class="btn btn-primary" id="add">+ New subject</button>
+        <div class="flex" style="gap:8px">
+          <button class="btn" id="dedupe">Remove empty duplicates</button>
+          <button class="btn btn-primary" id="add">+ New subject</button>
+        </div>
       </div>
       <div class="card"><table>
         <thead><tr><th></th><th>Subject</th><th>Assigned to</th><th>Lessons</th><th></th></tr></thead>
@@ -1021,6 +1024,7 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     `));
 
     root.querySelector('#add').onclick = () => editSubject(null);
+    root.querySelector('#dedupe').onclick = () => cleanUpDuplicates('subjects', 'subject');
 
     const tb = root.querySelector('#tb');
     subs.forEach((s, idx) => {
@@ -1556,6 +1560,46 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
          + (Store.portfolio() || []).filter(p => p.childId === id).length;
   }
 
+  const isEmptyChild   = c => childItemCount(c.id) === 0;
+  const isEmptySubject = s => !Store.curricula().some(c => c.subjectId === s.id);
+
+  /* Undo the seed-duplication mess: every fresh browser seeded its own copy of each
+     child and subject, and old syncs merged them. This soft-deletes only the copies
+     that are provably EMPTY (a child with no work, a subject with no lessons), keeps
+     every copy that has data, and never removes the last one of a name. So it can
+     only ever remove throwaway duplicates — never anything you actually filled in. */
+  function removeEmptyDuplicates(kind) {
+    const list    = kind === 'subjects' ? Store.allSubjects() : Store.children();
+    const isEmpty = kind === 'subjects' ? isEmptySubject : isEmptyChild;
+
+    const groups = {};
+    list.forEach(r => {
+      const key = (r.name || '').trim().toLowerCase();
+      (groups[key] = groups[key] || []).push(r);
+    });
+
+    let removed = 0;
+    Object.values(groups).forEach(group => {
+      if (group.length < 2) return;
+      const nonEmpty = group.filter(r => !isEmpty(r));
+      const keepers  = nonEmpty.length ? nonEmpty : [group[0]];   // all empty? keep the first
+      group.forEach(r => {
+        if (keepers.includes(r) || !isEmpty(r)) return;           // never touch one with data
+        Store.remove(kind, r.id);
+        removed++;
+      });
+    });
+    return removed;
+  }
+
+  function cleanUpDuplicates(kind, noun) {
+    const n = removeEmptyDuplicates(kind);
+    App.render();
+    setTimeout(() => alert(
+      n ? `Removed ${n} empty duplicate ${noun}${n === 1 ? '' : 's'}.`
+        : `No empty duplicate ${noun}s found — nothing to clean up.`), 0);
+  }
+
   function renderChildren(mount) {
     const kids = Store.children();
     mount.innerHTML = '';
@@ -1639,7 +1683,10 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
           was synced &mdash; delete those and keep the one that has the work.
         </div>
         <div id="childBox"></div>
-        <button class="btn mt" id="addChild">+ Add child</button>
+        <div class="flex mt" style="gap:8px">
+          <button class="btn" id="addChild">+ Add child</button>
+          <button class="btn" id="dedupeChildren">Remove empty duplicates</button>
+        </div>
       </div>
 
       <div class="card">
@@ -1698,6 +1745,7 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     renderChildren(root.querySelector('#childBox'));
 
     root.querySelector('#addChild').onclick = () => editChild(null);
+    root.querySelector('#dedupeChildren').onclick = () => cleanUpDuplicates('children', 'child');
 
     root.querySelector('#mode').onclick = e => {
       const b = e.target.closest('button'); if (!b) return;
