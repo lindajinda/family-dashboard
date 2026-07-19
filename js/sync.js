@@ -96,6 +96,19 @@ const Sync = (() => {
    * Merge two whole documents. Pure — no network, no storage. This is the function
    * the tests hammer, because it is the only place data can silently be destroyed.
    */
+  /**
+   * Decide how a fresh device joins. A browser that has only ever shown untouched
+   * seed content carries data.fresh === true. If it then syncs against a repo that
+   * already holds a family, merging would union its throwaway seed with the real
+   * data and duplicate every child — so instead it ADOPTS the remote wholesale.
+   * Once the user has edited anything (fresh cleared), this falls back to a merge.
+   */
+  function reconcile(local, remote) {
+    const remoteHasFamily = remote && (remote.children || []).some(c => !c.deleted);
+    if (local && local.fresh && remoteHasFamily) return remote;
+    return merge(local, remote);
+  }
+
   function merge(local, remote) {
     if (!remote) return local;
     if (!local) return remote;
@@ -243,7 +256,7 @@ const Sync = (() => {
     try {
       for (let attempt = 0; attempt < 3; attempt++) {
         const { doc: remote, sha } = await pull();
-        const merged = merge(Store.raw, remote);
+        const merged = reconcile(Store.raw, remote);
 
         applying = true;
         try { Store.replaceAll(merged); } finally { applying = false; }
@@ -293,7 +306,7 @@ const Sync = (() => {
   }
 
   return {
-    merge, mergeCollection, unionById, isApplying,   // exported for the tests
+    merge, mergeCollection, unionById, reconcile, isApplying,   // exported for the tests
     config, connect, disconnect, isOn, status, onStatus, syncNow, start
   };
 })();

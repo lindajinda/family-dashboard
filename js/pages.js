@@ -1542,6 +1542,78 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     root.appendChild(table);
   }
 
+  /* ------------------------------------------------------------ children admin
+
+     There was no way to remove a child, which mattered the day duplicates appeared:
+     every fresh, unsynced browser seeds its own Amaru/Keanu/Ender, and a later sync
+     merged all the sets together. The item count makes the empty duplicates obvious.
+     Deletes are soft (see store.js), so removing one syncs to every computer and
+     cannot come back to life. */
+
+  function childItemCount(id) {
+    const n = arr => arr.filter(r => r.childId === id).length;
+    return n(Store.curricula()) + n(Store.tasks()) + n(Store.habits())
+         + (Store.portfolio() || []).filter(p => p.childId === id).length;
+  }
+
+  function renderChildren(mount) {
+    const kids = Store.children();
+    mount.innerHTML = '';
+
+    kids.forEach(c => {
+      const count = childItemCount(c.id);
+      const row = h(`
+        <div class="row" style="align-items:center;padding:7px 9px;margin-bottom:6px">
+          <span class="seg-dot" style="background:${esc(c.color || '#8A8A8A')};width:14px;height:14px;flex:0 0 14px;border-radius:50%"></span>
+          <div class="row-main">
+            <span class="row-subject">${esc(c.name)}</span>
+            <span class="chip ${count ? '' : 'chip-warn'}">${count} item${count === 1 ? '' : 's'}</span>
+          </div>
+          <div class="row-actions" style="gap:6px">
+            <button class="btn btn-sm" data-rename>Rename</button>
+            <button class="btn btn-sm btn-danger" data-del>Delete</button>
+          </div>
+        </div>
+      `).firstElementChild;
+
+      row.querySelector('[data-rename]').onclick = () => editChild(c);
+
+      row.querySelector('[data-del]').onclick = () => {
+        if (Store.children().length <= 1) {
+          alert('This is your only child — add another before deleting this one.');
+          return;
+        }
+        const warn = count
+          ? `${c.name} has ${count} assigned item${count === 1 ? '' : 's'}. Deleting hides ${c.name} and that work from the dashboard. Delete anyway?`
+          : `Delete ${c.name}? (This one has no work assigned.)`;
+        if (!confirm(warn)) return;
+        Store.remove('children', c.id);
+        App.render();
+      };
+
+      mount.appendChild(row);
+    });
+  }
+
+  function editChild(c) {
+    const palette = ['#0F6CBD', '#107C41', '#C239B3', '#CA5010', '#8764B8', '#00838F', '#986F0B', '#D13438'];
+    Modal.open(c ? 'Rename child' : 'Add child', `
+      <div class="field"><label>Name</label>
+        <input type="text" id="cn" value="${esc(c ? c.name : '')}" placeholder="e.g. Amaru"></div>
+    `, () => {
+      const name = document.querySelector('#cn').value.trim();
+      if (!name) return;
+      if (c) {
+        Store.update('children', c.id, { name });
+      } else {
+        const kids = Store.children();
+        const order = kids.reduce((m, k) => Math.max(m, k.order || 0), -1) + 1;
+        Store.add('children', { name, color: palette[order % palette.length], order });
+      }
+      App.render();
+    });
+  }
+
   /* =============================================================== SETTINGS */
 
   function settings(root) {
@@ -1557,6 +1629,17 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
         <div class="field mt"><label>School year</label>
           <input type="text" id="yr" value="${esc(Store.settings.schoolYear)}" style="max-width:220px">
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Children</h2>
+        <div class="sub" style="margin-bottom:12px">
+          The number is how much work is assigned to each child. Duplicates (a second
+          &ldquo;Amaru&rdquo; showing <b>0 items</b>) can appear if a computer was used before it
+          was synced &mdash; delete those and keep the one that has the work.
+        </div>
+        <div id="childBox"></div>
+        <button class="btn mt" id="addChild">+ Add child</button>
       </div>
 
       <div class="card">
@@ -1612,6 +1695,9 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
 
     renderSync(root.querySelector('#syncBox'));
     renderDevice(root.querySelector('#deviceBox'));
+    renderChildren(root.querySelector('#childBox'));
+
+    root.querySelector('#addChild').onclick = () => editChild(null);
 
     root.querySelector('#mode').onclick = e => {
       const b = e.target.closest('button'); if (!b) return;

@@ -29,6 +29,7 @@ const Store = (() => {
   const LOCAL_KEY = 'familyDashboard.v1';
 
   let data = null;
+  let seeding = false;   // true only while Seed.apply runs — see load()/touch()
   const listeners = [];
 
   /* ---------------------------------------------------------------- helpers */
@@ -75,6 +76,7 @@ const Store = (() => {
     return {
       schemaVersion: SCHEMA_VERSION,
       updatedAt: nowIso(),
+      fresh: false,      // set true only for untouched seed content; see load()
       settings: {
         mode: 'School Year',           // Summer | School Year | Vacation | Custom
         schoolYear: '2026-2027',
@@ -343,7 +345,15 @@ const Store = (() => {
         }
       } else {
         data = emptyData();
+        seeding = true;
         Seed.apply(api);
+        seeding = false;
+        // This browser only holds untouched starter content. If it later joins an
+        // existing synced family, sync ADOPTS that family instead of merging its
+        // seed in — otherwise every fresh device would duplicate every child.
+        // The flag is cleared by the first real edit (touch) or by replaceAll.
+        data.fresh = true;
+        api.save();
       }
       return api;
     },
@@ -403,6 +413,7 @@ const Store = (() => {
 
   function touch() {
     data.updatedAt = nowIso();
+    if (!seeding) data.fresh = false;   // a real edit: no longer pristine seed
     api.save();
     emit();
   }

@@ -892,6 +892,35 @@ test('an UN-delete also propagates, because it is just a newer edit', () => {
   ok(!Sync.merge(undeleted, deleted).subjects[0].deleted, 'the newer un-delete wins');
 });
 
+test('a FRESH device joining an existing family ADOPTS it, never duplicates', () => {
+  // The bug that made three "Amaru" buttons: a brand-new browser seeds its own
+  // Amaru/Keanu/Ender, then syncs. A plain merge would union both sets. reconcile()
+  // spots the untouched-seed device (fresh:true) and adopts the real family instead.
+  const freshSeed = doc({ fresh: true, children: [rec('seedA', '2026-09-14T10:00:00Z', { name: 'Amaru' })] });
+  const realRepo  = doc({ children: [rec('realA', '2026-09-14T09:00:00Z', { name: 'Amaru' })] });
+
+  const out = Sync.reconcile(freshSeed, realRepo);
+  eq(out.children.length, 1, 'one Amaru, not two');
+  eq(out.children[0].id, 'realA', 'and it is the repo\'s real child, seed discarded');
+});
+
+test('a fresh device with an EMPTY repo keeps its seed (first computer ever)', () => {
+  const freshSeed = doc({ fresh: true, children: [rec('seedA', '2026-09-14T10:00:00Z', { name: 'Amaru' })] });
+  const emptyRepo = doc({ children: [] });
+
+  const out = Sync.reconcile(freshSeed, emptyRepo);
+  eq(out.children.length, 1, 'the seed survives to become the baseline');
+  eq(out.children[0].id, 'seedA');
+});
+
+test('once a device has been EDITED (not fresh) it merges normally, not adopts', () => {
+  const edited   = doc({ children: [rec('mineA', '2026-09-14T10:00:00Z', { name: 'Amaru' })] });
+  const realRepo = doc({ children: [rec('realA', '2026-09-14T09:00:00Z', { name: 'Keanu' })] });
+
+  const out = Sync.reconcile(edited, realRepo);
+  eq(out.children.map(c => c.name).sort(), ['Amaru', 'Keanu'], 'a real edit is never thrown away');
+});
+
 test('THE PORTFOLIO CAN ONLY EVER GROW', () => {
   // The permanent record. A sync must never be able to lose a completed lesson,
   // whatever else happens — so it is a pure union, never a last-write-wins.
