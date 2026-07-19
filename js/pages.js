@@ -1047,11 +1047,15 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
           </td>
           <td>${assigned.length ? assigned.map(c => `<span class="chip" style="margin-right:4px">${esc(c.name)}</span>`).join('') : '<span class="muted small">Nobody</span>'}</td>
           <td>${lessonCount}</td>
-          <td style="text-align:right"><button class="btn btn-sm" data-edit>Edit</button></td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-sm" data-edit>Edit</button>
+            <button class="btn btn-sm btn-danger" data-del>Delete</button>
+          </td>
         </tr>
       `).firstElementChild;
 
       tr.querySelector('[data-edit]').onclick = () => editSubject(s);
+      tr.querySelector('[data-del]').onclick = () => deleteSubject(s, assigned, lessonCount);
       tr.querySelector('[data-up]').onclick = () => reorder(subs, idx, -1);
       tr.querySelector('[data-down]').onclick = () => reorder(subs, idx, +1);
 
@@ -1137,6 +1141,30 @@ Day 3: Rest & mobility | Stretching routine | 10 min walk"></textarea>
     };
 
     input.oninput = () => { preview.textContent = input.value; };
+  }
+
+  /* A real delete for a subject — distinct from Archive (which only greys it out).
+     Removes the subject AND its curricula so no leftover lessons keep scheduling,
+     which is exactly the case with duplicate subjects orphaned by a deleted child:
+     they still hold lessons but are assigned to nobody. Soft deletes throughout, so
+     it syncs everywhere and is recoverable from a backup; the portfolio (which keeps
+     subject names, not ids) is untouched, so completed history survives. */
+  function deleteSubject(s, assigned, lessonCount) {
+    let msg = `Delete "${s.name}"?`;
+    if (assigned && assigned.length) {
+      msg += `\n\nIt is still assigned to ${assigned.map(c => c.name).join(', ')}. `
+           + `Their upcoming lessons for this subject will be removed from the schedule.`;
+    } else if (lessonCount) {
+      msg += `\n\nIt has ${lessonCount} left-over lesson${lessonCount === 1 ? '' : 's'} `
+           + `(usually from a child that was removed). They will be cleared.`;
+    }
+    msg += `\n\nCompleted work in the portfolio is kept. This can be undone from a backup.`;
+    if (!confirm(msg)) return;
+
+    Store.curricula().filter(c => c.subjectId === s.id)
+      .forEach(c => Store.remove('curricula', c.id));
+    Store.remove('subjects', s.id);
+    App.render();
   }
 
   function editSubject(s) {
